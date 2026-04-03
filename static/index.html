@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buy or Not</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background:
+    radial-gradient(circle at top, rgba(255,255,255,.06), transparent 30%),
+    linear-gradient(180deg, #121212 0%, #0d0d0d 100%);
+  color: #f0f0f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 18px 80px;
+}
+a { color: inherit; text-decoration: none; }
+
+.header { text-align: center; margin-bottom: 28px; }
+.header h1 { font-size: 28px; font-weight: 800; }
+.header p { color: #7a7a7a; font-size: 14px; margin-top: 8px; }
+
+.steps { display: flex; gap: 6px; align-items: center; margin-bottom: 24px; font-size: 12px; }
+.step {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px;
+  border: 1px solid #2a2a2a; color: #555; transition: all .3s;
+}
+.step.active { border-color: #555; color: #f0f0f0; background: #1b1b1b; }
+.step.done { border-color: #2d6a4f; color: #2dc97e; background: #0c1f17; }
+.divider { width: 18px; height: 1px; background: #2a2a2a; }
+
+.card, .panel {
+  width: 100%;
+  max-width: 560px;
+  background: rgba(24,24,24,.92);
+  border: 1px solid #242424;
+  border-radius: 22px;
+  padding: 24px;
+  margin-bottom: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
+}
+.card-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  margin-bottom: 16px;
+}
+
+textarea, input[type="text"] {
+  width: 100%;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  color: #f0f0f0;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  outline: none;
+  font-family: inherit;
+}
+textarea {
+  resize: none;
+  height: 96px;
+}
+textarea:focus, input[type="text"]:focus { border-color: #555; }
+textarea::placeholder, input[type="text"]::placeholder { color: #4f4f4f; }
+
+.helper-copy {
+  font-size: 12px;
+  color: #7a7a7a;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.img-btn {
+  flex: 0 0 auto;
+  min-width: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  color: #777;
+  font-size: 13px;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.img-btn:hover { border-color: #3a3a3a; color: #d6d6d6; }
+.img-btn.has-img { border-color: #2d6a4f; color: #2dc97e; background: #0a2018; }
+.submit-btn, .small-btn {
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .2s;
+}
+.submit-btn {
+  flex: 1;
+  background: #f0f0f0;
+  color: #111;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px;
+}
+.submit-btn:hover { background: #dbdbdb; }
+.small-btn {
+  background: #222;
+  color: #e3e3e3;
+  font-size: 13px;
+  padding: 12px 14px;
+  border: 1px solid #303030;
+}
+.small-btn:hover { border-color: #4e4e4e; }
+
+#img-preview {
+  width: 100%;
+  border-radius: 12px;
+  margin-top: 12px;
+  max-height: 180px;
+  object-fit: contain;
+  display: none;
+  border: 1px solid #2a2a2a;
+}
+
+.prog-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid #1b1b1b;
+  font-size: 14px;
+  color: #666;
+  transition: all .3s;
+}
+.prog-step:last-child { border-bottom: none; }
+.prog-step.running { color: #f0f0f0; }
+.prog-step.done { color: #2dc97e; }
+.prog-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.prog-step.running .prog-icon { background: #252525; }
+.prog-step.done .prog-icon { background: #0a2018; }
+.prog-detail {
+  font-size: 12px;
+  color: #727272;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2a2a2a;
+  border-top-color: #bbb;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.subtle-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #1f1f1f;
+}
+.subtle-title {
+  font-size: 11px;
+  color: #6f6f6f;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  margin-bottom: 10px;
+}
+
+.trace-list, .query-list, .report-list, .source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.trace-item, .query-item, .report-item, .source-item {
+  background: #111;
+  border: 1px solid #232323;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.dimension-item {
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.dimension-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.dimension-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0f0f0;
+}
+.dimension-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #9fb6c5;
+}
+.dimension-detail {
+  font-size: 13px;
+  color: #bfbfbf;
+  line-height: 1.5;
+}
+.trace-label, .query-label, .report-title, .source-top {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-bottom: 4px;
+}
+.trace-detail, .query-detail, .report-body, .source-snippet {
+  font-size: 13px;
+  color: #9a9a9a;
+  line-height: 1.5;
+}
+
+.fact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.fact-card {
+  background: #111;
+  border: 1px solid #232323;
+  border-radius: 14px;
+  padding: 14px;
+}
+.fact-title {
+  font-size: 11px;
+  color: #717171;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 8px;
+}
+.fact-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-bottom: 6px;
+}
+.fact-detail {
+  font-size: 13px;
+  color: #909090;
+  line-height: 1.45;
+}
+
+.followup-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.round-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid #333;
+  color: #9a9a9a;
+}
+.fq-question {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.fq-sub {
+  font-size: 13px;
+  color: #777;
+  margin-bottom: 18px;
+}
+.opt-btn {
+  width: 100%;
+  text-align: left;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  color: #dfdfdf;
+  font-size: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+.opt-btn:hover { border-color: #575757; background: #1b1b1b; }
+.opt-btn:disabled, .small-btn:disabled, input:disabled, textarea:disabled, .submit-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.custom-followup {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.other-input-toggle {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+  display: block;
+  margin-top: 6px;
+}
+.other-input-toggle:hover { color: #aaa; }
+
+.verdict-card {
+  border-radius: 24px;
+  padding: 26px;
+  width: 100%;
+  max-width: 560px;
+  margin-bottom: 14px;
+}
+.verdict-card.worth_buying { background: #0a2018; border: 1px solid #1b3a29; }
+.verdict-card.cautious { background: #231609; border: 1px solid #3d250b; }
+.verdict-card.not_recommended { background: #220a0a; border: 1px solid #3a1212; }
+.verdict-card.recommendation { background: #0b1720; border: 1px solid #1a3547; }
+
+.verdict-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+.worth_buying .verdict-chip { background: #173628; color: #2dc97e; }
+.cautious .verdict-chip { background: #3d250b; color: #e07c24; }
+.not_recommended .verdict-chip { background: #3a1212; color: #e74c3c; }
+.recommendation .verdict-chip { background: #122634; color: #81d4ff; }
+
+.verdict-heading {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+.worth_buying .verdict-heading { color: #2dc97e; }
+.cautious .verdict-heading { color: #e07c24; }
+.not_recommended .verdict-heading { color: #e74c3c; }
+.recommendation .verdict-heading { color: #f0f0f0; }
+
+.verdict-product { font-size: 14px; color: #b2b2b2; margin-bottom: 6px; }
+.verdict-price { font-size: 13px; color: #cbcbcb; margin-bottom: 16px; }
+.verdict-summary {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #ececec;
+  margin-bottom: 22px;
+}
+
+.sec-title {
+  font-size: 11px;
+  color: #808080;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 12px;
+}
+.reason-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #ddd;
+  line-height: 1.55;
+}
+.reason-dot {
+  color: #525252;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.spec-item {
+  background: rgba(0,0,0,.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.spec-key { font-size: 11px; color: #8d8d8d; margin-bottom: 4px; }
+.spec-val { font-size: 13px; color: #f0f0f0; font-weight: 600; }
+
+.alt-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(0,0,0,.2);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.05);
+  margin-bottom: 8px;
+}
+.alt-arrow {
+  color: #2dc97e;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.alt-name { font-size: 14px; color: #f0f0f0; font-weight: 700; margin-bottom: 4px; }
+.alt-reason { font-size: 13px; color: #bdbdbd; line-height: 1.45; }
+
+.recommend-item {
+  padding: 14px;
+  background: rgba(0,0,0,.22);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.06);
+  margin-bottom: 10px;
+}
+.recommend-item.featured {
+  background: linear-gradient(180deg, rgba(18,38,52,.9), rgba(10,18,26,.95));
+  border-color: rgba(129,212,255,.22);
+  padding: 18px;
+}
+.recommend-rank {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #9ad8ff;
+  margin-bottom: 8px;
+}
+.recommend-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f0f0f0;
+  margin-bottom: 6px;
+}
+.recommend-meta {
+  font-size: 12px;
+  color: #8ebbd8;
+  margin-bottom: 8px;
+}
+.recommend-reason {
+  font-size: 13px;
+  color: #d8e7f1;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.recommend-tradeoffs {
+  font-size: 12px;
+  color: #a6bccb;
+  line-height: 1.5;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,.08);
+  margin: 18px 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.reset-btn {
+  background: none;
+  border: 1px solid #2f2f2f;
+  border-radius: 14px;
+  color: #8f8f8f;
+  font-size: 13px;
+  padding: 11px 20px;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+}
+.reset-btn:hover { border-color: #5a5a5a; color: #ddd; }
+
+.history-wrap { width: 100%; max-width: 560px; margin-top: 8px; }
+.history-header {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(23,23,23,.95);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  border: 1px solid #202020;
+}
+.h-name {
+  color: #b8b8b8;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.h-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.h-badge.worth_buying { background: #0a2018; color: #2dc97e; }
+.h-badge.cautious { background: #221508; color: #e07c24; }
+.h-badge.not_recommended { background: #200808; color: #e74c3c; }
+
+.hidden { display: none !important; }
+
+.profile-wrap { width: 100%; max-width: 560px; margin-top: 8px; }
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.profile-header:hover { color: #999; }
+.profile-toggle { font-size: 10px; }
+.profile-card {
+  background: rgba(20,20,20,.9);
+  border: 1px solid #1f1f1f;
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.profile-field { }
+.profile-field-label {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+.profile-field-value {
+  font-size: 13px;
+  color: #c0c0c0;
+  line-height: 1.45;
+}
+.profile-empty {
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+  padding: 8px 0;
+  grid-column: 1 / -1;
+}
+.profile-tag {
+  display: inline-block;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #aaa;
+  margin: 2px 2px 0 0;
+}
+
+.clickable-alt {
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.clickable-alt:hover { border-color: rgba(45,201,126,.3) !important; background: rgba(10,32,24,.5) !important; }
+.clickable-rec {
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.clickable-rec:hover { border-color: rgba(129,212,255,.4) !important; }
+.click-hint {
+  font-size: 11px;
+  color: #2dc97e;
+  margin-top: 6px;
+  opacity: .7;
+}
+
+.memory-tools {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.memory-card {
+  flex: 1 1 280px;
+  background: rgba(18,18,18,.92);
+  border: 1px solid #212121;
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+.memory-card-label {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.memory-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.memory-select {
+  flex: 1;
+  min-width: 180px;
+  background: #121212;
+  border: 1px solid #2a2a2a;
+  color: #ececec;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.memory-btn {
+  border: 1px solid #2a2a2a;
+  background: #181818;
+  color: #eaeaea;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.memory-btn:hover { border-color: #3b3b3b; }
+.memory-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #717171;
+  line-height: 1.5;
+}
+
+.onboarding-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.onboarding-intro {
+  background: rgba(20,20,20,.96);
+  border: 1px solid #222;
+  border-radius: 18px;
+  padding: 18px 20px;
+}
+.onboarding-title {
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.onboarding-copy {
+  font-size: 15px;
+  color: #bcbcbc;
+  line-height: 1.7;
+}
+.seed-step {
+  background: rgba(18,18,18,.92);
+  border: 1px solid #232323;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+}
+.seed-step.disabled {
+  opacity: .38;
+  filter: grayscale(.15);
+}
+.seed-kicker {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #6f6f6f;
+  margin-bottom: 8px;
+}
+.seed-question {
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.seed-subcopy {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #9e9e9e;
+  margin-bottom: 14px;
+}
+.seed-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.seed-option {
+  border: 1px solid #2a2a2a;
+  background: #111;
+  color: #ececec;
+  border-radius: 14px;
+  padding: 13px 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color .2s, transform .2s, background .2s;
+}
+.seed-option:hover { border-color: #3d3d3d; transform: translateY(-1px); }
+.seed-option.active {
+  border-color: rgba(45,201,126,.5);
+  background: rgba(10,32,24,.82);
+  color: #d9ffec;
+}
+.seed-option.multi.active {
+  border-color: rgba(129,212,255,.5);
+  background: rgba(18,38,52,.86);
+  color: #def4ff;
+}
+.seed-child {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(14,14,14,.95);
+  border: 1px solid #262626;
+}
+.seed-child-label {
+  font-size: 13px;
+  color: #b7b7b7;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.seed-limit {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #777;
+}
+.seed-summary {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #202020;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.seed-tag {
+  background: #171717;
+  border: 1px solid #2b2b2b;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #b8b8b8;
+}
+.seed-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.seed-primary-btn {
+  flex: 1;
+  min-width: 220px;
+  border: none;
+  border-radius: 14px;
+  background: #f2f2f2;
+  color: #111;
+  padding: 15px 18px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.seed-secondary-btn {
+  border: 1px solid #2a2a2a;
+  background: #171717;
+  color: #e6e6e6;
+  border-radius: 14px;
+  padding: 15px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seed-primary-btn:disabled,
+.seed-secondary-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.seed-done {
+  background: rgba(10,32,24,.82);
+  border: 1px solid rgba(45,201,126,.24);
+  color: #d8fbe8;
+  border-radius: 16px;
+  padding: 16px 18px;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .memory-tools { margin-bottom: 12px; }
+  .memory-row { flex-direction: column; align-items: stretch; }
+  .profile-card { grid-template-columns: 1fr; }
+  .custom-followup, .input-row { flex-direction: column; }
+  .img-btn { min-height: 48px; }
+  .specs-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Buy or Not</h1>
+  <p>买之前，问一句</p>
+</div>
+
+<div class="steps" id="steps">
+  <div class="step active" id="stp1">① Input</div>
+  <div class="divider"></div>
+  <div class="step" id="stp2">② Research</div>
+  <div class="divider"></div>
+  <div class="step" id="stp3">③ Verdict</div>
+</div>
+
+<div class="memory-tools">
+  <div class="memory-card">
+    <div class="memory-card-label">Memory Workspace</div>
+    <div class="memory-row">
+      <select class="memory-select" id="memory-slot-select" onchange="switchMemorySlot(this.value)"></select>
+      <button class="memory-btn" onclick="resetToNewUserState()">恢复新用户状态</button>
+    </div>
+    <div class="memory-hint" id="memory-slot-hint">你可以新开一轮新用户测试，旧记忆会保留，随时可以切换回来继续问。</div>
+  </div>
+</div>
+
+<div id="scr-onboarding" class="card hidden">
+  <div class="onboarding-wrap">
+    <div class="onboarding-intro">
+      <div class="card-label">New User Setup</div>
+      <div class="onboarding-title">先认识一下你，再开始买前参谋</div>
+      <div class="onboarding-copy">嗨，我是你的买前参谋。帮人买东西之前，我得先知道我在帮谁买。这里不用想太多，跟着直觉点一轮，我会先搭个基础画像，后面越用越懂你。</div>
+    </div>
+
+    <div id="seed-steps"></div>
+
+    <div class="seed-actions">
+      <button class="seed-primary-btn" id="seed-finish-btn" onclick="finishOnboarding()" disabled>完成这轮建模，进入 App</button>
+      <button class="seed-secondary-btn" onclick="skipOnboarding()">先跳过，直接进 App</button>
+    </div>
+
+    <div class="seed-done hidden" id="seed-done-copy">基础画像已经记住啦。接下来你直接问，我会在具体商品问题里继续补全你的 memory。</div>
+  </div>
+</div>
+
+<div id="scr-input" class="card">
+  <div class="card-label">What are you considering buying?</div>
+
+  <textarea id="txt" placeholder="Type a product name, description, screenshot context, or paste a URL...&#10;e.g. &quot;Sony WH-1000XM5&quot; or &quot;小红书刷到一个防晒，入吗&quot;"></textarea>
+  <img id="img-preview" alt="preview">
+
+  <div class="input-row">
+    <label class="img-btn" id="img-label">
+      <span id="img-icon">📷</span>
+      <span id="img-text">Add Image</span>
+      <input type="file" id="img-file" accept="image/*" style="display:none" onchange="onImage(event)">
+    </label>
+    <button class="submit-btn" id="sub-btn" onclick="doAnalyze()">Analyze →</button>
+  </div>
+
+  <div class="helper-copy">
+    你可以丢给我一个具体商品，也可以直接说需求。系统会先判断要不要先问一个关键问题，再决定怎么搜，避免先查一大圈又返工。
+  </div>
+</div>
+
+<div id="scr-progress" class="card hidden">
+  <div class="card-label">Working through your request</div>
+  <div class="prog-step" id="p1">
+    <div class="prog-icon">👁</div>
+    <div>
+      <div>Understanding the request</div>
+      <div class="prog-detail" id="p1d">Reading your input...</div>
+    </div>
+  </div>
+  <div class="prog-step" id="p2">
+    <div class="prog-icon">🔍</div>
+    <div>
+      <div>Clarify or search</div>
+      <div class="prog-detail" id="p2d">Checking price, specs, reviews, and alternatives...</div>
+    </div>
+  </div>
+  <div class="prog-step" id="p3">
+    <div class="prog-icon">⚖️</div>
+    <div>
+      <div>Forming verdict</div>
+      <div class="prog-detail" id="p3d">Turning facts into a decision report...</div>
+    </div>
+  </div>
+
+  <div class="subtle-panel hidden" id="progress-research">
+    <div class="subtle-title">What the system just checked</div>
+    <div class="trace-list" id="progress-trace"></div>
+  </div>
+</div>
+
+<div id="scr-followup" class="card hidden">
+  <div class="followup-head">
+    <div class="card-label" style="margin-bottom:0">Need one more input</div>
+    <div class="round-chip" id="fq-round">Round 1 / 3</div>
+  </div>
+  <div class="fq-question" id="fq-q"></div>
+  <div class="fq-sub" id="fq-sub">这个信息会明显影响检索方向，所以我先问清楚，不让你白等。</div>
+  <div id="fq-opts"></div>
+  <button class="other-input-toggle hidden" id="fq-other-toggle" onclick="showCustomInput()">自己输入 ↓</button>
+  <div class="custom-followup" id="fq-custom-row">
+    <input type="text" id="fq-text" placeholder="或者你也可以自己补充一句上下文">
+    <button class="small-btn" id="fq-submit" onclick="submitCustomFollowup()">继续分析</button>
+  </div>
+
+  <div class="subtle-panel hidden" id="followup-research-wrap">
+    <div class="subtle-title">Research snapshot</div>
+    <div class="fact-grid" id="followup-facts"></div>
+  </div>
+</div>
+
+<div id="scr-result" class="hidden">
+  <div class="verdict-card" id="vc">
+    <div class="verdict-chip" id="v-chip"></div>
+    <div class="verdict-heading" id="v-heading"></div>
+    <div class="verdict-product" id="v-product"></div>
+    <div class="verdict-price" id="v-price"></div>
+    <div class="verdict-summary" id="v-summary"></div>
+
+    <div id="recommend-section">
+      <hr class="section-divider">
+      <div class="sec-title">Recommended for you</div>
+      <div id="v-recommendations"></div>
+    </div>
+
+    <div id="dimension-section">
+      <hr class="section-divider">
+      <div class="sec-title">How I broke this down</div>
+      <div id="v-dimensions"></div>
+    </div>
+
+    <div class="sec-title">Why</div>
+    <div id="v-reasons"></div>
+
+    <div id="report-section-wrap">
+      <hr class="section-divider">
+      <div class="sec-title">Why this verdict makes sense</div>
+      <div class="report-list" id="v-report-sections"></div>
+    </div>
+
+    <div id="specs-section">
+      <hr class="section-divider">
+      <div class="sec-title">Key Specs</div>
+      <div class="specs-grid" id="v-specs"></div>
+    </div>
+
+    <div id="alts-section">
+      <hr class="section-divider">
+      <div class="sec-title">Consider Instead</div>
+      <div id="v-alts"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="research-panel">
+    <div class="card-label">Transparent process</div>
+
+    <div id="fact-section">
+      <div class="sec-title">Objective facts checked</div>
+      <div class="fact-grid" id="research-facts"></div>
+    </div>
+
+    <div id="query-section" class="subtle-panel">
+      <div class="subtle-title">Search passes</div>
+      <div class="query-list" id="research-queries"></div>
+    </div>
+
+    <div id="source-section" class="subtle-panel">
+      <div class="subtle-title">Sources consulted</div>
+      <div class="source-list" id="research-sources"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="reset-btn" onclick="doReset()">← Analyze another product</button>
+  </div>
+</div>
+
+<div class="history-wrap hidden" id="hist-wrap">
+  <div class="history-header">Recent decisions</div>
+  <div id="hist-list"></div>
+</div>
+
+<div class="profile-wrap hidden" id="profile-wrap">
+  <div class="profile-header" onclick="toggleProfile()">
+    <span>Your Memory Profile</span>
+    <span class="profile-toggle" id="profile-toggle">▼</span>
+  </div>
+  <div id="profile-card-wrap">
+    <div class="profile-card" id="profile-card">
+      <div class="profile-empty">还没有足够信息来建立画像。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+const ICONS = {
+  worth_buying: '✓ Worth Buying',
+  cautious: '⚠ Buy with Caution',
+  not_recommended: "✕ Don't Recommend"
+};
+const PROG_ICONS = { p1: '👁', p2: '🔍', p3: '⚖️' };
+const analysisMode = 'decision';
+const SLOT_STORAGE_KEY = 'bon_memory_slots_v2';
+const ACTIVE_SLOT_STORAGE_KEY = 'bon_active_memory_slot_v2';
+const BASE_UID_STORAGE_KEY = 'bon_uid';
+const LEGACY_SLOT_ID = 'legacy';
+
+const VALUE_DRIVER_LABELS = {
+  price_value: '值不值这个价',
+  durability: '能用多久',
+  brand_reliability: '牌子靠不靠谱',
+  looks: '好不好看',
+  novelty: '没见过，想试试',
+  practical: '够不够用就行'
+};
+
+const CATEGORY_OPTION_MAP = {
+  clothing: '穿的',
+  electronics: '数码家电',
+  beauty: '美妆护肤',
+  food: '吃的喝的',
+  home: '家里用的',
+  fitness: '运动户外',
+  entertainment: '娱乐那块',
+  family: '母婴亲子'
+};
+
+const DECISION_STYLE_OPTIONS = [
+  { id: 'impulse', label: '顺眼就下单，不纠结' },
+  { id: 'compare', label: '货比三家，比完再买' },
+  { id: 'research', label: '研究很久，看完评测才买' }
+];
+
+const ONBOARDING_STEPS = [
+  {
+    id: 'identity',
+    label: '身份',
+    prompt: '你现在是什么状态呀',
+    subcopy: '这个会直接影响预算弹性和很多购买判断的起点。',
+    mode: 'single',
+    requiredCount: 1,
+    options: [
+      {
+        id: 'student',
+        label: '🎒 还在上学',
+        child: {
+          prompt: '上学的话生活费是命根子，我懂的',
+          options: [
+            { id: 'student_family_supported', label: '本科以下，消费基本靠家里' },
+            { id: 'student_grad', label: '研究生，有一点自己的钱' }
+          ]
+        }
+      },
+      {
+        id: 'employed',
+        label: '💼 上班了',
+        child: {
+          prompt: '工作多久了，这个挺影响钱包厚度的哈',
+          options: [
+            { id: 'career_early', label: '刚工作没多久' },
+            { id: 'career_mid', label: '1-3年，开始有点数了' },
+            { id: 'career_stable', label: '3年以上，比较稳了' }
+          ]
+        }
+      },
+      { id: 'freeform', label: '🧘 自由飘着' }
+    ]
+  },
+  {
+    id: 'household',
+    label: '家庭',
+    prompt: '你自己住还是跟家人住啊',
+    subcopy: '很多购买决策其实不是“给自己买”，而是整个生活状态一起在影响。',
+    mode: 'single',
+    requiredCount: 1,
+    options: [
+      { id: 'solo', label: '一个人住' },
+      {
+        id: 'family_live',
+        label: '跟家人住',
+        child: {
+          prompt: '家里的东西有时候也你来买吗',
+          options: [
+            { id: 'family_procurement_yes', label: '有，我一般负责采购' },
+            { id: 'family_procurement_no', label: '不太管，主要买自己的' }
+          ]
+        }
+      },
+      { id: 'partner', label: '跟对象住' },
+      {
+        id: 'with_kids',
+        label: '已经成家有孩子了',
+        child: {
+          prompt: '哇，娃多大了',
+          options: [
+            { id: 'kid_0_3', label: '0-3岁' },
+            { id: 'kid_3_6', label: '3-6岁' },
+            { id: 'kid_6_plus', label: '6岁以上' }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    id: 'spending_style',
+    label: '消费风格',
+    prompt: '你买东西大概是什么风格',
+    subcopy: '先给你的钱包和心态打个底，后面推荐会稳很多。',
+    mode: 'single',
+    requiredCount: 1,
+    options: [
+      { id: 'frugal', label: '能省则省，买之前必比价' },
+      { id: 'balanced', label: '看情况，不纠结但也不乱花' },
+      { id: 'quality', label: '品质优先，贵一点没关系' },
+      { id: 'impulsive', label: '看上了就买，不太想价格' }
+    ],
+    child: {
+      prompt: '随便锚定一下，买件日常穿的外套你大概花多少',
+      options: [
+        { id: 'outerwear_under_100', label: '100以内' },
+        { id: 'outerwear_100_300', label: '100-300' },
+        { id: 'outerwear_300_800', label: '300-800' },
+        { id: 'outerwear_800_plus', label: '800往上' }
+      ]
+    }
+  },
+  {
+    id: 'value_drivers',
+    label: '价值取向',
+    prompt: '买东西的时候你脑子里通常在转什么，选两个最像你的',
+    subcopy: '这个比“你预算多少”更重要，它会决定你到底在乎什么。',
+    mode: 'multi',
+    requiredCount: 2,
+    options: [
+      {
+        id: 'price_value',
+        label: '💰 这个值这个价吗',
+        child: {
+          prompt: '遇到真心喜欢但贵一倍的你怎么办',
+          options: [
+            { id: 'price_value_buy', label: '咬牙买，喜欢就值' },
+            { id: 'price_value_dupe', label: '找个平替，效果差不多就行' },
+            { id: 'price_value_wait', label: '先收藏，等打折' }
+          ]
+        }
+      },
+      { id: 'durability', label: '🏗️ 这东西能用多久' },
+      {
+        id: 'brand_reliability',
+        label: '🏷️ 这牌子靠不靠谱',
+        child: {
+          prompt: '你更在乎哪种牌子',
+          options: [
+            { id: 'brand_mainstream', label: '大家都认识的，买着踏实' },
+            { id: 'brand_niche', label: '小众有格调的，不撞款' }
+          ]
+        }
+      },
+      { id: 'looks', label: '👀 好不好看' },
+      { id: 'novelty', label: '🌟 没见过，想试试' },
+      { id: 'practical', label: '🔧 够不够用就行' }
+    ]
+  },
+  {
+    id: 'shopping_for',
+    label: '为谁买',
+    prompt: '你一般都是给谁买东西',
+    subcopy: '如果你经常替别人买，判断逻辑就不能只围着你自己转。',
+    mode: 'multi',
+    requiredCount: 1,
+    maxCount: 3,
+    options: [
+      { id: 'self', label: '🙋 基本就买给我自己' },
+      { id: 'partner', label: '💑 我和对象两个人都买' },
+      {
+        id: 'parents',
+        label: '👨‍👩 有时候也给爸妈买',
+        child: {
+          prompt: '爸妈大概多大了',
+          options: [
+            { id: 'parents_50_60', label: '50-60岁' },
+            { id: 'parents_60_70', label: '60-70岁' },
+            { id: 'parents_70_plus', label: '70岁以上' }
+          ]
+        }
+      },
+      { id: 'kids', label: '👶 有孩子要买' },
+      {
+        id: 'gift',
+        label: '🎁 经常要送人',
+        child: {
+          prompt: '一般是什么情况送',
+          options: [
+            { id: 'gift_fixed', label: '生日节日这种固定场合' },
+            { id: 'gift_casual', label: '随手表达一下' },
+            { id: 'gift_formal', label: '职场那种，比较正式' }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    id: 'high_frequency_categories',
+    label: '高频品类',
+    prompt: '你的钱主要流向哪里，选三个最准的',
+    subcopy: '这会让我知道你最常遇到的决策场景，从而提前准备合适的判断方式。',
+    mode: 'multi',
+    requiredCount: 3,
+    sharedChild: true,
+    options: [
+      { id: 'clothing', label: '👗 穿的' },
+      { id: 'electronics', label: '📱 数码家电' },
+      { id: 'beauty', label: '💄 美妆护肤' },
+      { id: 'food', label: '🍜 吃的喝的' },
+      { id: 'home', label: '🏠 家里用的' },
+      { id: 'fitness', label: '🏃 运动户外' },
+      { id: 'entertainment', label: '🎮 娱乐那块' },
+      { id: 'family', label: '🍼 母婴亲子' }
+    ],
+    child: {
+      prompt: '如果看这几个你最常买的品类，你整体更接近哪种消费状态？',
+      options: [
+        { id: 'category_light', label: '花得不算多，更多是日常顺手买' },
+        { id: 'category_mid', label: '会花一些，也会认真比一比' },
+        { id: 'category_heavy', label: '这是主要支出，我通常会研究很久' }
+      ]
+    }
+  }
+];
+
+const BASE_UID_TOKEN = localStorage.getItem(BASE_UID_STORAGE_KEY) || (() => {
+  const id = Math.random().toString(36).slice(2, 9);
+  localStorage.setItem(BASE_UID_STORAGE_KEY, id);
+  return id;
+})();
+
+let imgB64 = null;
+let pendingSessionId = null;
+let pendingQuestion = null;
+let followupRound = 0;
+let pendingFollowupQuestions = [];
+let followupAnswers = [];
+let currentFollowupIndex = 0;
+let profileCollapsed = false;
+let currentProfile = {};
+let memorySlots = [];
+let activeSlotId = LEGACY_SLOT_ID;
+let onboardingState = {};
+
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function initializeMemorySlots() {
+  const now = new Date().toISOString();
+  const saved = readJsonStorage(SLOT_STORAGE_KEY, []);
+  if (saved.length) {
+    memorySlots = saved;
+  } else {
+    memorySlots = [{ id: LEGACY_SLOT_ID, label: '现有记忆', createdAt: now, kind: 'legacy' }];
+    writeJsonStorage(SLOT_STORAGE_KEY, memorySlots);
+  }
+
+  if (!memorySlots.some(slot => slot.id === LEGACY_SLOT_ID)) {
+    memorySlots.unshift({ id: LEGACY_SLOT_ID, label: '现有记忆', createdAt: now, kind: 'legacy' });
+  }
+
+  const storedActive = localStorage.getItem(ACTIVE_SLOT_STORAGE_KEY);
+  activeSlotId = memorySlots.some(slot => slot.id === storedActive) ? storedActive : memorySlots[0].id;
+  localStorage.setItem(ACTIVE_SLOT_STORAGE_KEY, activeSlotId);
+}
+
+function getCurrentSlot() {
+  return memorySlots.find(slot => slot.id === activeSlotId) || memorySlots[0];
+}
+
+function currentUserId() {
+  return activeSlotId === LEGACY_SLOT_ID
+    ? `u_${BASE_UID_TOKEN}`
+    : `u_${BASE_UID_TOKEN}__${activeSlotId}`;
+}
+
+function renderMemorySlotControls() {
+  const select = document.getElementById('memory-slot-select');
+  select.innerHTML = memorySlots.map(slot => `
+    <option value="${esc(slot.id)}" ${slot.id === activeSlotId ? 'selected' : ''}>${esc(slot.label)}</option>
+  `).join('');
+  const slot = getCurrentSlot();
+  document.getElementById('memory-slot-hint').textContent = slot.id === LEGACY_SLOT_ID
+    ? '这是你之前已经积累下来的记忆版本。想测新用户流程时，可以新开一轮，不会把这份删掉。'
+    : `当前是 ${slot.label}。这是一份隔离开的测试记忆，旧数据都还在，随时能切回。`;
+}
+
+function createNewMemorySlot() {
+  const existingCount = memorySlots.filter(slot => slot.id !== LEGACY_SLOT_ID).length;
+  const id = `seed_${Date.now().toString(36)}`;
+  const label = `新用户测试 ${existingCount + 1}`;
+  const slot = { id, label, createdAt: new Date().toISOString(), kind: 'sandbox' };
+  memorySlots.push(slot);
+  writeJsonStorage(SLOT_STORAGE_KEY, memorySlots);
+  return slot;
+}
+
+function resetToNewUserState() {
+  const slot = createNewMemorySlot();
+  activeSlotId = slot.id;
+  localStorage.setItem(ACTIVE_SLOT_STORAGE_KEY, activeSlotId);
+  renderMemorySlotControls();
+  onboardingState = {};
+  currentProfile = {};
+  doReset({ preserveInput: false, targetScreen: 'scr-onboarding' });
+  renderOnboarding();
+  renderProfile({});
+  renderHistory([]);
+}
+
+function switchMemorySlot(slotId) {
+  if (!memorySlots.some(slot => slot.id === slotId)) return;
+  activeSlotId = slotId;
+  localStorage.setItem(ACTIVE_SLOT_STORAGE_KEY, activeSlotId);
+  doReset({ preserveInput: false, targetScreen: 'scr-input' });
+  renderMemorySlotControls();
+  refreshWorkspace();
+}
+
+function normalizeArray(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return [];
+}
+
+function hasMeaningfulProfile(profile = {}) {
+  if (!profile || typeof profile !== 'object') return false;
+  const scalarKeys = ['occupation', 'age_group', 'family_context', 'skin_type', 'budget_sensitivity'];
+  const listKeys = ['use_cases', 'owned_items', 'primary_use_cases', 'lifestyle_hints', 'pets'];
+  if (scalarKeys.some(key => profile[key])) return true;
+  if (listKeys.some(key => normalizeArray(profile[key]).length)) return true;
+  const seed = profile.memory_seed || {};
+  return !!(seed && typeof seed === 'object' && Object.keys(seed).length);
+}
+
+function emptyOnboardingState() {
+  onboardingState = Object.fromEntries(ONBOARDING_STEPS.map(step => [step.id, { selected: [], children: {} }]));
+}
+
+function getStepState(stepId) {
+  if (!onboardingState[stepId]) onboardingState[stepId] = { selected: [], children: {} };
+  return onboardingState[stepId];
+}
+
+function getOption(step, optionId) {
+  return (step.options || []).find(option => option.id === optionId);
+}
+
+function getChildConfig(step, option) {
+  if (step.sharedChild) return step.child || null;
+  if (step.childMode === 'per_selected') return step.child || null;
+  return option?.child || step.child || null;
+}
+
+function isStepComplete(step) {
+  const state = getStepState(step.id);
+  const requiredCount = step.requiredCount || 1;
+  const selected = state.selected || [];
+  if (step.mode === 'multi') {
+    if (selected.length < requiredCount) return false;
+    if (step.maxCount && selected.length > step.maxCount) return false;
+  } else if (selected.length !== 1) {
+    return false;
+  }
+
+  for (const optionId of selected) {
+    const option = getOption(step, optionId);
+    const child = getChildConfig(step, option);
+    if (!child) continue;
+    if (step.sharedChild) {
+      if (!state.children.__shared__) return false;
+    } else if (!state.children[optionId]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function stepSummaryTags(step) {
+  const state = getStepState(step.id);
+  const tags = [];
+  for (const optionId of state.selected || []) {
+    const option = getOption(step, optionId);
+    if (!option) continue;
+    tags.push(option.label.replace(/^[^A-Za-z0-9\u4e00-\u9fa5]+/u, '').trim());
+    const childId = state.children[optionId];
+    const effectiveChildId = step.sharedChild ? state.children.__shared__ : childId;
+    if (effectiveChildId && !step.sharedChild) {
+      const child = getChildConfig(step, option);
+      const childOption = (child?.options || []).find(item => item.id === effectiveChildId);
+      if (childOption) tags.push(childOption.label);
+    }
+  }
+  if (step.sharedChild && state.children.__shared__) {
+    const childOption = (((step.child || {}).options || []).find(item => item.id === state.children.__shared__) || {});
+    if (childOption.label) tags.push(childOption.label);
+  }
+  return [...new Set(tags)];
+}
+
+function getUnlockedStepCount() {
+  for (let index = 0; index < ONBOARDING_STEPS.length; index += 1) {
+    if (!isStepComplete(ONBOARDING_STEPS[index])) return index + 1;
+  }
+  return ONBOARDING_STEPS.length;
+}
+
+function toggleOption(stepId, optionId) {
+  const step = ONBOARDING_STEPS.find(item => item.id === stepId);
+  if (!step) return;
+  const state = getStepState(stepId);
+  const selected = state.selected || [];
+
+  if (step.mode === 'multi') {
+    const exists = selected.includes(optionId);
+    if (exists) {
+      state.selected = selected.filter(item => item !== optionId);
+      delete state.children[optionId];
+    } else {
+      const maxCount = step.maxCount || step.requiredCount || step.options.length;
+      if (selected.length >= maxCount) return;
+      state.selected = [...selected, optionId];
+    }
+  } else {
+    state.selected = selected[0] === optionId ? [] : [optionId];
+    const keepKeys = new Set(state.selected);
+    state.children = Object.fromEntries(Object.entries(state.children || {}).filter(([key]) => keepKeys.has(key)));
+  }
+
+  renderOnboarding();
+}
+
+function selectChildOption(stepId, optionId, childId) {
+  const state = getStepState(stepId);
+  const step = ONBOARDING_STEPS.find(item => item.id === stepId);
+  if (step?.sharedChild) {
+    state.children.__shared__ = childId;
+  } else {
+    state.children[optionId] = childId;
+  }
+  renderOnboarding();
+}
+
+function renderChildQuestion(step, option, optionId, childConfig) {
+  if (!childConfig) return '';
+  const state = getStepState(step.id);
+  const selectedChild = step.sharedChild ? (state.children.__shared__ || '') : (state.children[optionId] || '');
+  return `
+    <div class="seed-child">
+      <div class="seed-child-label">${esc(childConfig.prompt || '')}</div>
+      <div class="seed-options">
+        ${(childConfig.options || []).map(child => `
+          <button
+            class="seed-option ${selectedChild === child.id ? 'active' : ''}"
+            onclick='selectChildOption(${JSON.stringify(step.id)}, ${JSON.stringify(optionId)}, ${JSON.stringify(child.id)})'
+          >
+            ${esc(child.label)}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderStep(step, disabled) {
+  const state = getStepState(step.id);
+  const selected = state.selected || [];
+  const requiredCount = step.requiredCount || 1;
+  const isMulti = step.mode === 'multi';
+
+  return `
+    <div class="seed-step ${disabled ? 'disabled' : ''}">
+      <div class="seed-kicker">${esc(step.label)}</div>
+      <div class="seed-question">${esc(step.prompt)}</div>
+      <div class="seed-subcopy">${esc(step.subcopy || '')}</div>
+      <div class="seed-options">
+        ${(step.options || []).map(option => {
+          const active = selected.includes(option.id);
+          return `
+            <button
+              class="seed-option ${isMulti ? 'multi ' : ''}${active ? 'active' : ''}"
+              ${disabled ? 'disabled' : ''}
+              onclick='toggleOption(${JSON.stringify(step.id)}, ${JSON.stringify(option.id)})'
+            >
+              ${esc(option.label)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+      ${isMulti ? `<div class="seed-limit">请选 ${requiredCount} 个${step.maxCount && step.maxCount !== requiredCount ? `，最多 ${step.maxCount} 个` : ''}。</div>` : ''}
+      ${step.sharedChild
+        ? (selected.length
+            ? renderChildQuestion(step, null, '__shared__', step.child)
+            : '')
+        : (selected || []).map(optionId => {
+            const option = getOption(step, optionId);
+            const child = getChildConfig(step, option);
+            return renderChildQuestion(step, option, optionId, child);
+          }).join('')}
+      ${stepSummaryTags(step).length ? `<div class="seed-summary">${stepSummaryTags(step).map(tag => `<span class="seed-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderOnboarding() {
+  const wrap = document.getElementById('seed-steps');
+  const unlocked = getUnlockedStepCount();
+  wrap.innerHTML = ONBOARDING_STEPS.slice(0, unlocked).map((step, index) => renderStep(step, false)).join('');
+  document.getElementById('seed-finish-btn').disabled = !ONBOARDING_STEPS.every(isStepComplete);
+}
+
+function buildOnboardingSeed() {
+  const getSelection = stepId => {
+    const state = getStepState(stepId);
+    return {
+      selected: [...(state.selected || [])],
+      children: { ...(state.children || {}) }
+    };
+  };
+
+  const identity = getSelection('identity');
+  const household = getSelection('household');
+  const spending = getSelection('spending_style');
+  const values = getSelection('value_drivers');
+  const shopping = getSelection('shopping_for');
+  const categories = getSelection('high_frequency_categories');
+
+  const identityLabel = (getOption(ONBOARDING_STEPS[0], identity.selected[0]) || {}).label || '';
+  const identityDetailOption = identity.children[identity.selected[0]];
+  const identityDetailLabel = identityDetailOption
+    ? (((getChildConfig(ONBOARDING_STEPS[0], getOption(ONBOARDING_STEPS[0], identity.selected[0])) || {}).options || []).find(item => item.id === identityDetailOption) || {}).label || ''
+    : '';
+
+  const householdOption = getOption(ONBOARDING_STEPS[1], household.selected[0]);
+  const householdLabel = householdOption?.label || '';
+  const householdDetailId = household.children[household.selected[0]];
+  const householdDetailLabel = householdDetailId
+    ? (((getChildConfig(ONBOARDING_STEPS[1], householdOption) || {}).options || []).find(item => item.id === householdDetailId) || {}).label || ''
+    : '';
+
+  const spendingOption = getOption(ONBOARDING_STEPS[2], spending.selected[0]);
+  const spendingLabel = spendingOption?.label || '';
+  const spendingDetailId = spending.children[spending.selected[0]];
+  const spendingDetailLabel = spendingDetailId
+    ? (((getChildConfig(ONBOARDING_STEPS[2], spendingOption) || {}).options || []).find(item => item.id === spendingDetailId) || {}).label || ''
+    : '';
+
+  const valueLabels = values.selected.map(optionId => (getOption(ONBOARDING_STEPS[3], optionId) || {}).label).filter(Boolean);
+  const shoppingLabels = shopping.selected.map(optionId => (getOption(ONBOARDING_STEPS[4], optionId) || {}).label).filter(Boolean);
+  const categoryLabels = categories.selected.map(optionId => CATEGORY_OPTION_MAP[optionId] || optionId).filter(Boolean);
+  const categorySpendProfileId = categories.children.__shared__ || '';
+  const categorySpendProfileLabel = (((ONBOARDING_STEPS[5].child || {}).options || []).find(item => item.id === categorySpendProfileId) || {}).label || '';
+
+  return {
+    onboarding_version: 1,
+    identity: identity.selected[0] || '',
+    identity_label: identityLabel,
+    identity_detail: identityDetailOption || '',
+    identity_detail_label: identityDetailLabel,
+    household: household.selected[0] || '',
+    household_label: householdLabel,
+    household_detail: householdDetailId || '',
+    household_detail_label: householdDetailLabel,
+    spending_style: spending.selected[0] || '',
+    spending_style_label: spendingLabel,
+    outerwear_price_anchor: spendingDetailId || '',
+    outerwear_price_anchor_label: spendingDetailLabel,
+    value_drivers: valueLabels.map(label => label.replace(/^[^A-Za-z0-9\u4e00-\u9fa5]+/u, '').trim()),
+    value_driver_ids: [...values.selected],
+    brand_preference: values.children.brand_reliability || '',
+    brand_preference_label: values.children.brand_reliability
+      ? (((getChildConfig(ONBOARDING_STEPS[3], getOption(ONBOARDING_STEPS[3], 'brand_reliability')) || {}).options || []).find(item => item.id === values.children.brand_reliability) || {}).label || ''
+      : '',
+    expensive_choice_reaction: values.children.price_value || '',
+    expensive_choice_reaction_label: values.children.price_value
+      ? (((getChildConfig(ONBOARDING_STEPS[3], getOption(ONBOARDING_STEPS[3], 'price_value')) || {}).options || []).find(item => item.id === values.children.price_value) || {}).label || ''
+      : '',
+    shopping_for: shoppingLabels.map(label => label.replace(/^[^A-Za-z0-9\u4e00-\u9fa5]+/u, '').trim()),
+    shopping_for_ids: [...shopping.selected],
+    parent_age_range: shopping.children.parents || '',
+    parent_age_range_label: shopping.children.parents
+      ? (((getChildConfig(ONBOARDING_STEPS[4], getOption(ONBOARDING_STEPS[4], 'parents')) || {}).options || []).find(item => item.id === shopping.children.parents) || {}).label || ''
+      : '',
+    gifting_scenario: shopping.children.gift || '',
+    gifting_scenario_label: shopping.children.gift
+      ? (((getChildConfig(ONBOARDING_STEPS[4], getOption(ONBOARDING_STEPS[4], 'gift')) || {}).options || []).find(item => item.id === shopping.children.gift) || {}).label || ''
+      : '',
+    high_frequency_categories: categoryLabels,
+    high_frequency_category_ids: [...categories.selected],
+    high_frequency_spend_profile: categorySpendProfileId,
+    high_frequency_spend_profile_label: categorySpendProfileLabel,
+    completed_at: new Date().toISOString()
+  };
+}
+
+function dedupe(items) {
+  return [...new Set((items || []).filter(Boolean))];
+}
+
+function mapSeedToProfileUpdates(seed) {
+  const updates = {
+    memory_seed: seed
+  };
+
+  if (seed.identity === 'student') {
+    updates.age_group = 'student';
+    updates.occupation = '学生';
+  } else if (seed.identity === 'employed') {
+    updates.age_group = seed.identity_detail === 'career_stable' ? 'other' : 'young_professional';
+    updates.occupation = '上班族';
+  } else if (seed.identity === 'freeform') {
+    updates.age_group = 'other';
+    updates.occupation = '自由状态';
+  }
+
+  if (seed.household_label) {
+    updates.family_context = seed.household_detail_label
+      ? `${seed.household_label}｜${seed.household_detail_label}`
+      : seed.household_label;
+  }
+
+  const budgetMap = {
+    frugal: 'tight',
+    balanced: 'moderate',
+    quality: 'flexible',
+    impulsive: 'flexible'
+  };
+  if (budgetMap[seed.spending_style]) {
+    updates.budget_sensitivity = budgetMap[seed.spending_style];
+  }
+
+  return updates;
+}
+
+async function finishOnboarding() {
+  const seed = buildOnboardingSeed();
+  const updates = mapSeedToProfileUpdates(seed);
+  const button = document.getElementById('seed-finish-btn');
+  const secondary = document.querySelector('.seed-secondary-btn');
+  button.disabled = true;
+  secondary.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/profile/${currentUserId()}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    currentProfile = data.profile || {};
+    document.getElementById('seed-done-copy').classList.remove('hidden');
+    renderProfile(currentProfile);
+    await sleep(420);
+    doReset({ preserveInput: false, targetScreen: 'scr-input' });
+    loadHistory();
+    loadProfile();
+  } catch (err) {
+    alert('初始化画像失败：' + err.message);
+  } finally {
+    button.disabled = !ONBOARDING_STEPS.every(isStepComplete);
+    secondary.disabled = false;
+  }
+}
+
+function skipOnboarding() {
+  doReset({ preserveInput: false, targetScreen: 'scr-input' });
+}
+
+function formatPets(pets) {
+  if (!Array.isArray(pets) || !pets.length) return '';
+  return pets.slice(0, 3).map(pet => {
+    if (typeof pet === 'string') return pet;
+    const parts = [pet.breed || pet.species || '宠物'];
+    if (pet.age) parts.push(pet.age);
+    if (pet.health_notes) parts.push(pet.health_notes);
+    return parts.join('·');
+  }).join('、');
+}
+
+function renderMemorySeed(profile, fields) {
+  const seed = profile.memory_seed || {};
+  if (!seed || typeof seed !== 'object' || !Object.keys(seed).length) return;
+
+  if (seed.identity_label || seed.identity_detail_label) {
+    fields.push({
+      label: '基础状态',
+      display: `<span>${esc([seed.identity_label, seed.identity_detail_label].filter(Boolean).join('｜'))}</span>`
+    });
+  }
+
+  if (seed.value_drivers?.length) {
+    fields.push({
+      label: '消费取向',
+      display: seed.value_drivers.slice(0, 4).map(item => `<span class="profile-tag">${esc(item)}</span>`).join('')
+    });
+  }
+
+  if (seed.shopping_for?.length) {
+    fields.push({
+      label: '常为谁买',
+      display: seed.shopping_for.slice(0, 4).map(item => `<span class="profile-tag">${esc(item)}</span>`).join('')
+    });
+  }
+
+  if (seed.high_frequency_categories?.length) {
+    fields.push({
+      label: '高频品类',
+      display: seed.high_frequency_categories.slice(0, 4).map(item => `<span class="profile-tag">${esc(item)}</span>`).join('')
+    });
+  }
+
+  if (seed.high_frequency_spend_profile_label) {
+    fields.push({
+      label: '这些高频品类你通常会怎么花',
+      display: `<span>${esc(seed.high_frequency_spend_profile_label)}</span>`
+    });
+  }
+}
+
+function setStep(n) {
+  [1, 2, 3].forEach(i => {
+    const el = document.getElementById('stp' + i);
+    el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  });
+}
+
+function resetProgress() {
+  ['p1', 'p2', 'p3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'prog-step';
+    el.querySelector('.prog-icon').textContent = PROG_ICONS[id];
+  });
+  document.getElementById('progress-research').classList.add('hidden');
+  document.getElementById('progress-trace').innerHTML = '';
+  document.getElementById('p2d').textContent = 'Checking price, specs, reviews, and alternatives...';
+  document.getElementById('p3d').textContent = 'Turning facts into a decision report...';
+}
+
+function doneStep(id) {
+  const el = document.getElementById(id);
+  el.className = 'prog-step done';
+  el.querySelector('.prog-icon').textContent = '✓';
+}
+
+function renderProgressResearch(research) {
+  const trace = research?.trace || [];
+  const sources = (research?.sources || []).slice(0, 4).map(x => x.site).filter(Boolean);
+  document.getElementById('p2d').textContent = sources.length
+    ? `Checked ${Array.from(new Set(sources)).join(', ')}`
+    : 'Checked price, specs, reviews, and alternatives.';
+  document.getElementById('p3d').textContent = research?.fact_cards?.length
+    ? `${research.fact_cards.length} objective fact modules prepared`
+    : 'Turning facts into a decision report...';
+
+  if (!trace.length) return;
+  document.getElementById('progress-research').classList.remove('hidden');
+  document.getElementById('progress-trace').innerHTML = trace.map(item => `
+    <div class="trace-item">
+      <div class="trace-label">${esc(item.label || '')}</div>
+      <div class="trace-detail">${esc(item.detail || '')}</div>
+    </div>
+  `).join('');
+}
+
+function appendProgressEvent(event) {
+  const wrap = document.getElementById('progress-research');
+  const list = document.getElementById('progress-trace');
+  wrap.classList.remove('hidden');
+  const item = document.createElement('div');
+  item.className = 'trace-item';
+  item.innerHTML = `
+    <div class="trace-label">${esc(event.label || '')}</div>
+    <div class="trace-detail">${esc(event.detail || '')}</div>
+  `;
+  list.appendChild(item);
+}
+
+function updateProgressStep(step, label, detail) {
+  if (step === 'identify' || step === 'understand') {
+    document.getElementById('p1').className = 'prog-step running';
+    document.querySelector('#p1 .prog-icon').innerHTML = '<div class="spinner"></div>';
+    document.getElementById('p1d').textContent = detail || label || 'Reading your input...';
+  } else if (step === 'clarify') {
+    doneStep('p1');
+    document.getElementById('p2').className = 'prog-step running';
+    document.querySelector('#p2 .prog-icon').innerHTML = '<div class="spinner"></div>';
+    document.getElementById('p2d').textContent = detail || label || 'Pausing to confirm one high-impact detail before searching.';
+  } else if (step === 'search') {
+    doneStep('p1');
+    document.getElementById('p2').className = 'prog-step running';
+    document.querySelector('#p2 .prog-icon').innerHTML = '<div class="spinner"></div>';
+    document.getElementById('p2d').textContent = detail || label || 'Searching the web...';
+  } else if (step === 'synthesize') {
+    doneStep('p1');
+    doneStep('p2');
+    document.getElementById('p3').className = 'prog-step running';
+    document.querySelector('#p3 .prog-icon').innerHTML = '<div class="spinner"></div>';
+    document.getElementById('p3d').textContent = detail || label || 'Forming the answer...';
+  }
+}
+
+async function consumeStream(url, payload) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`Server ${res.status}: ${await res.text()}`);
+  if (!res.body) throw new Error('No response stream available');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalEvent = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.type === 'status') {
+        updateProgressStep(event.step, event.label, event.detail);
+        appendProgressEvent(event);
+      } else if (event.type === 'followup' || event.type === 'result') {
+        finalEvent = event;
+      } else if (event.type === 'error') {
+        throw new Error(event.message || 'Streaming failed');
+      }
+    }
+
+    if (done) break;
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer);
+    if (event.type === 'followup' || event.type === 'result') finalEvent = event;
+    if (event.type === 'error') throw new Error(event.message || 'Streaming failed');
+  }
+
+  return finalEvent;
+}
+
+function onImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    imgB64 = ev.target.result.split(',')[1];
+    const el = document.getElementById('img-preview');
+    el.src = ev.target.result;
+    el.style.display = 'block';
+    const lbl = document.getElementById('img-label');
+    lbl.classList.add('has-img');
+    document.getElementById('img-icon').textContent = '✓';
+    document.getElementById('img-text').textContent = file.name.slice(0, 20);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function doAnalyze() {
+  const text = document.getElementById('txt').value.trim();
+  if (!text && !imgB64) {
+    document.getElementById('txt').style.borderColor = '#c0392b';
+    setTimeout(() => document.getElementById('txt').style.borderColor = '#2a2a2a', 1500);
+    return;
+  }
+
+  showOnly('scr-progress');
+  setStep(2);
+  resetProgress();
+  updateProgressStep('identify', 'Reading your input', imgB64 ? 'Identifying the product from your image...' : `"${text.slice(0, 36)}..."`);
+
+  try {
+    const finalEvent = await consumeStream(`${API}/analyze/stream`, {
+      user_id: currentUserId(),
+      text: text || null,
+      image_base64: imgB64 || null,
+      analysis_mode: analysisMode
+    });
+    if (!finalEvent) throw new Error('No final event returned');
+    const data = finalEvent.data;
+    renderProgressResearch(data.research);
+    if ((data.research?.queries || []).length) {
+      doneStep('p2');
+      doneStep('p3');
+    } else {
+      doneStep('p1');
+    }
+
+    await sleep(180);
+    if (data.followup) {
+      pendingSessionId = data.session_id;
+      pendingQuestion = data.followup.question;
+      followupRound = data.followup_round || 1;
+      pendingFollowupQuestions = data.followup_questions || [data.followup];
+      followupAnswers = [];
+      currentFollowupIndex = 0;
+      showFollowup(data);
+    } else {
+      showResult(data);
+      loadHistory();
+      loadProfile();
+    }
+  } catch (err) {
+    showOnly('scr-input');
+    setStep(1);
+    alert('⚠ Error connecting to server:\n' + err.message + '\n\nMake sure the server is running:\ncd ~/buyornot-backend && ./start.sh');
+  }
+}
+
+function queueFollowupAnswer(answer) {
+  if (!answer) return;
+  const current = pendingFollowupQuestions[currentFollowupIndex];
+  if (!current) return;
+  followupAnswers[currentFollowupIndex] = {
+    question: current.question,
+    answer
+  };
+  currentFollowupIndex += 1;
+
+  if (currentFollowupIndex < pendingFollowupQuestions.length) {
+    renderCurrentFollowupQuestion();
+    return;
+  }
+  sendFollowupBatch();
+}
+
+async function sendFollowupBatch() {
+  const answers = followupAnswers.filter(Boolean);
+  if (!answers.length) return;
+
+  setFollowupBusy(true);
+  showOnly('scr-progress');
+  setStep(2);
+  resetProgress();
+  updateProgressStep('identify', 'Using your clarification', `Captured ${answers.length} follow-up answer${answers.length > 1 ? 's' : ''}.`);
+
+  try {
+    const finalEvent = await consumeStream(`${API}/followup/stream`, {
+      session_id: pendingSessionId,
+      user_id: currentUserId(),
+      answers
+    });
+    if (!finalEvent) throw new Error('No final event returned');
+    const data = finalEvent.data;
+    renderProgressResearch(data.research);
+    if ((data.research?.queries || []).length) {
+      doneStep('p2');
+      doneStep('p3');
+    } else {
+      doneStep('p1');
+    }
+    await sleep(180);
+    if (data.followup) {
+      pendingQuestion = data.followup.question;
+      followupRound = data.followup_round || (followupRound + 1);
+      pendingFollowupQuestions = data.followup_questions || [data.followup];
+      followupAnswers = [];
+      currentFollowupIndex = 0;
+      showFollowup(data);
+    } else {
+      showResult(data);
+      loadHistory();
+      loadProfile();
+    }
+  } catch (err) {
+    setFollowupBusy(false);
+    showOnly('scr-input');
+    setStep(1);
+    alert('Error: ' + err.message);
+  }
+}
+
+function pickOption(answer) {
+  queueFollowupAnswer(answer);
+}
+
+function submitCustomFollowup() {
+  const answer = document.getElementById('fq-text').value.trim();
+  if (!answer) return;
+  queueFollowupAnswer(answer);
+}
+
+function renderFactCards(targetId, facts) {
+  const el = document.getElementById(targetId);
+  if (!facts?.length) {
+    el.innerHTML = '';
+    return false;
+  }
+  el.innerHTML = facts.map(card => `
+    <div class="fact-card">
+      <div class="fact-title">${esc(card.title || '')}</div>
+      <div class="fact-value">${esc(card.value || '')}</div>
+      <div class="fact-detail">${esc(card.detail || '')}</div>
+    </div>
+  `).join('');
+  return true;
+}
+
+function showFollowup(data) {
+  pendingQuestion = data.followup?.question || '';
+  pendingFollowupQuestions = data.followup_questions || pendingFollowupQuestions || [data.followup];
+  renderCurrentFollowupQuestion(data.followup_reason);
+
+  const hasFacts = renderFactCards('followup-facts', data.research?.fact_cards || []);
+  document.getElementById('followup-research-wrap').classList.toggle('hidden', !hasFacts);
+
+  setFollowupBusy(false);
+  showOnly('scr-followup');
+  setStep(2);
+}
+
+function showCustomInput() {
+  document.getElementById('fq-other-toggle').classList.add('hidden');
+  document.getElementById('fq-custom-row').style.display = '';
+  setTimeout(() => document.getElementById('fq-text').focus(), 40);
+}
+
+function renderCurrentFollowupQuestion(defaultReason = '') {
+  const current = pendingFollowupQuestions[currentFollowupIndex];
+  if (!current) return;
+  const total = pendingFollowupQuestions.length;
+  document.getElementById('fq-round').textContent = total > 1
+    ? `Question ${currentFollowupIndex + 1} / ${total}`
+    : 'Quick question';
+  document.getElementById('fq-q').textContent = current.question || '';
+  document.getElementById('fq-sub').textContent = current.reason || defaultReason || '把这几个关键前提补齐后，我就能更快收敛到结论。';
+
+  const isOpenText = current.question_type === 'open_text';
+  const fqText = document.getElementById('fq-text');
+  const fqOtherToggle = document.getElementById('fq-other-toggle');
+  const fqCustomRow = document.getElementById('fq-custom-row');
+  fqText.value = '';
+
+  const optsEl = document.getElementById('fq-opts');
+  if (isOpenText) {
+    optsEl.innerHTML = '';
+    fqText.placeholder = current.open_text_placeholder || '说说你的使用场景或职业方向...';
+    fqCustomRow.style.display = '';
+    fqOtherToggle.classList.add('hidden');
+    setTimeout(() => fqText.focus(), 80);
+  } else {
+    fqCustomRow.style.display = 'none';
+    fqText.placeholder = '或者你也可以自己补充一句上下文';
+    fqOtherToggle.classList.remove('hidden');
+    optsEl.innerHTML = (current.options || []).map((o, index) =>
+      `<button class="opt-btn" data-option-index="${index}">${esc(o)}</button>`
+    ).join('');
+    optsEl.querySelectorAll('.opt-btn').forEach((button, index) => {
+      button.addEventListener('click', () => pickOption((current.options || [])[index]));
+    });
+  }
+}
+
+function showResult(data) {
+  const resultType = data.result_type || 'decision';
+  const v = data.verdict || 'cautious';
+  document.getElementById('vc').className = 'verdict-card ' + (resultType === 'recommendation' ? 'recommendation' : v);
+  document.getElementById('v-chip').textContent = resultType === 'recommendation'
+    ? 'RECOMMENDATION'
+    : v.replace(/_/g, ' ').toUpperCase();
+  document.getElementById('v-heading').textContent = resultType === 'recommendation'
+    ? (data.headline || '推荐给你')
+    : (ICONS[v] || v);
+  document.getElementById('v-product').textContent = resultType === 'recommendation'
+    ? (data.product_name || data.category || '')
+    : (data.product_name || '');
+  document.getElementById('v-price').textContent = data.price_range ? '💰 ' + data.price_range : '';
+  document.getElementById('v-summary').textContent = data.summary || '';
+
+  const dimensions = data.decision_dimensions || [];
+  if (dimensions.length) {
+    document.getElementById('dimension-section').style.display = '';
+    document.getElementById('v-dimensions').innerHTML = dimensions.map(item => `
+      <div class="dimension-item">
+        <div class="dimension-top">
+          <div class="dimension-name">${esc(item.title || '')}</div>
+          <div class="dimension-status">${esc(item.status || '')}</div>
+        </div>
+        <div class="dimension-detail">${esc(item.detail || '')}</div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('dimension-section').style.display = 'none';
+  }
+
+  document.getElementById('v-reasons').innerHTML = (data.reasons || []).map(r =>
+    `<div class="reason-item"><span class="reason-dot">·</span><span>${esc(r)}</span></div>`
+  ).join('');
+
+  const recommendations = data.recommendations || [];
+  if (recommendations.length) {
+    document.getElementById('recommend-section').style.display = '';
+    document.getElementById('v-recommendations').innerHTML = recommendations.slice(0, 3).map((item, index) => `
+      <div class="recommend-item ${index === 0 ? 'featured' : ''} clickable-rec" onclick="analyzeFromRecommendation(${JSON.stringify(item.name || '')})">
+        <div class="recommend-rank">${index === 0 ? 'Top pick' : `Option ${index + 1}`}</div>
+        <div class="recommend-name">${esc(item.name || '')}</div>
+        <div class="recommend-meta">${esc(item.price_hint || '')}${item.best_for ? ' · 适合 ' + esc(item.best_for) : ''}</div>
+        <div class="recommend-reason">${esc(item.reason || '')}</div>
+        <div class="recommend-tradeoffs">${(item.tradeoffs || []).map(esc).join(' · ')}</div>
+        <div class="click-hint">点击深入分析这款 →</div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('recommend-section').style.display = 'none';
+  }
+
+  const reportSections = data.report_sections || [];
+  document.getElementById('v-report-sections').innerHTML = reportSections.map(section => `
+    <div class="report-item">
+      <div class="report-title">${esc(section.title || '')}</div>
+      <div class="report-body">${esc(section.body || '')}</div>
+    </div>
+  `).join('');
+  document.getElementById('report-section-wrap').style.display = reportSections.length ? '' : 'none';
+
+  const specs = data.key_specs || {};
+  const specKeys = Object.keys(specs);
+  if (specKeys.length) {
+    document.getElementById('specs-section').style.display = '';
+    document.getElementById('v-specs').innerHTML = specKeys.map(k => `
+      <div class="spec-item">
+        <div class="spec-key">${esc(k)}</div>
+        <div class="spec-val">${esc(specs[k])}</div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('specs-section').style.display = 'none';
+  }
+
+  const alts = data.alternatives || [];
+  if (alts.length) {
+    document.getElementById('alts-section').style.display = '';
+    document.getElementById('v-alts').innerHTML = alts.map(a => `
+      <div class="alt-item clickable-alt" onclick="analyzeFromRecommendation(${JSON.stringify(a.name || a)})">
+        <div class="alt-arrow">→</div>
+        <div style="flex:1">
+          <div class="alt-name">${esc(a.name || a)}</div>
+          <div class="alt-reason">${esc(a.reason || '')}</div>
+          <div class="click-hint">点击分析这款 →</div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('alts-section').style.display = 'none';
+  }
+
+  const hasFacts = renderFactCards('research-facts', data.research?.fact_cards || []);
+  document.getElementById('fact-section').style.display = hasFacts ? '' : 'none';
+
+  const queries = data.research?.queries || [];
+  document.getElementById('research-queries').innerHTML = queries.map(item => `
+    <div class="query-item">
+      <div class="query-label">${esc(item.label || '')}</div>
+      <div class="query-detail">${esc(item.query || '')}${item.error ? '<br><br>Search issue: ' + esc(item.error) : ''}</div>
+    </div>
+  `).join('');
+  document.getElementById('query-section').style.display = queries.length ? '' : 'none';
+
+  const sources = data.research?.sources || [];
+  document.getElementById('research-sources').innerHTML = sources.map(item => `
+    <a class="source-item" href="${safeUrl(item.url)}" target="_blank" rel="noreferrer">
+      <div class="source-top">${esc(item.title || item.site || 'Untitled source')}</div>
+      <div class="source-snippet">${esc(item.site || '')}${item.snippet ? ' · ' + esc(item.snippet) : ''}</div>
+    </a>
+  `).join('');
+  document.getElementById('source-section').style.display = sources.length ? '' : 'none';
+
+  showOnly('scr-result');
+  setStep(3);
+}
+
+function clearImageInput() {
+  const prev = document.getElementById('img-preview');
+  prev.style.display = 'none';
+  prev.src = '';
+  document.getElementById('img-label').classList.remove('has-img');
+  document.getElementById('img-icon').textContent = '📷';
+  document.getElementById('img-text').textContent = 'Add Image';
+  document.getElementById('img-file').value = '';
+  imgB64 = null;
+}
+
+function doReset(options = {}) {
+  const { preserveInput = false, targetScreen = 'scr-input' } = options;
+  if (!preserveInput) {
+    document.getElementById('txt').value = '';
+    document.getElementById('fq-text').value = '';
+    clearImageInput();
+  }
+  pendingSessionId = null;
+  pendingQuestion = null;
+  followupRound = 0;
+  pendingFollowupQuestions = [];
+  followupAnswers = [];
+  currentFollowupIndex = 0;
+  showOnly(targetScreen);
+  setStep(targetScreen === 'scr-result' ? 3 : 1);
+}
+
+function setFollowupBusy(busy) {
+  document.querySelectorAll('#fq-opts .opt-btn').forEach(button => {
+    button.disabled = busy;
+  });
+  document.getElementById('fq-text').disabled = busy;
+  document.getElementById('fq-submit').disabled = busy;
+  if (busy) document.getElementById('fq-other-toggle').classList.add('hidden');
+}
+
+function toggleProfile() {
+  profileCollapsed = !profileCollapsed;
+  document.getElementById('profile-card-wrap').style.display = profileCollapsed ? 'none' : '';
+  document.getElementById('profile-toggle').textContent = profileCollapsed ? '▶' : '▼';
+}
+
+async function loadProfile() {
+  try {
+    const res = await fetch(`${API}/profile/${currentUserId()}`);
+    const data = await res.json();
+    currentProfile = data.profile || {};
+    renderProfile(currentProfile);
+    if (!hasMeaningfulProfile(currentProfile) && document.getElementById('scr-input').classList.contains('hidden') && document.getElementById('scr-result').classList.contains('hidden') && document.getElementById('scr-followup').classList.contains('hidden')) {
+      emptyOnboardingState();
+      renderOnboarding();
+      showOnly('scr-onboarding');
+    }
+  } catch {}
+}
+
+function renderProfile(profile) {
+  const AGE_MAP = { student: '学生', young_professional: '职场新人', other: '其他' };
+  const BUDGET_MAP = { tight: '预算有限', moderate: '适中', flexible: '预算充裕' };
+
+  const fields = [];
+
+  if (profile.occupation) fields.push({ label: '职业', display: `<span>${esc(profile.occupation)}</span>` });
+  if (profile.age_group) fields.push({ label: '阶段', display: `<span>${esc(AGE_MAP[profile.age_group] || profile.age_group)}</span>` });
+  if (profile.family_context) fields.push({ label: '家庭', display: `<span>${esc(profile.family_context)}</span>` });
+
+  const petsStr = formatPets(profile.pets);
+  if (petsStr) fields.push({ label: '宠物', display: `<span>${esc(petsStr)}</span>` });
+
+  if (profile.skin_type) fields.push({ label: '肤质', display: `<span>${esc(profile.skin_type)}</span>` });
+  if (profile.budget_sensitivity) fields.push({ label: '预算', display: `<span>${esc(BUDGET_MAP[profile.budget_sensitivity] || profile.budget_sensitivity)}</span>` });
+
+  if (normalizeArray(profile.lifestyle_hints).length) fields.push({ label: '生活方式', display: normalizeArray(profile.lifestyle_hints).slice(0, 4).map(v => `<span class="profile-tag">${esc(v)}</span>`).join('') });
+
+  renderMemorySeed(profile, fields);
+
+  const wrap = document.getElementById('profile-wrap');
+  const card = document.getElementById('profile-card');
+
+  if (!fields.length) {
+    card.innerHTML = '<div class="profile-empty">这份记忆还是空白的。先跑一轮新用户建模，或者直接问几个具体问题，我会开始记住你。</div>';
+    wrap.classList.remove('hidden');
+    return;
+  }
+
+  card.innerHTML = fields.map(f => `
+    <div class="profile-field">
+      <div class="profile-field-label">${esc(f.label)}</div>
+      <div class="profile-field-value">${f.display}</div>
+    </div>
+  `).join('');
+  wrap.classList.remove('hidden');
+}
+
+function analyzeFromRecommendation(name) {
+  document.getElementById('txt').value = name;
+  clearImageInput();
+  doAnalyze();
+}
+
+function renderHistory(sessions) {
+  const list = (sessions || []).filter(s => s.product_name).slice(0, 5);
+  const wrap = document.getElementById('hist-wrap');
+  if (!list.length) {
+    wrap.classList.add('hidden');
+    document.getElementById('hist-list').innerHTML = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  document.getElementById('hist-list').innerHTML = list.map(s => {
+    const lbl = s.verdict === 'worth_buying' ? 'Buy' : s.verdict === 'cautious' ? 'Caution' : 'Skip';
+    return `<div class="history-item"><span class="h-name">${esc(s.product_name)}</span><span class="h-badge ${s.verdict}">${lbl}</span></div>`;
+  }).join('');
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API}/history/${currentUserId()}`);
+    const data = await res.json();
+    renderHistory(data.sessions || []);
+  } catch {
+    renderHistory([]);
+  }
+}
+
+function refreshWorkspace() {
+  loadHistory();
+  loadProfile().then(() => {
+    if (hasMeaningfulProfile(currentProfile)) {
+      showOnly('scr-input');
+      setStep(1);
+    } else {
+      emptyOnboardingState();
+      renderOnboarding();
+      showOnly('scr-onboarding');
+      setStep(1);
+    }
+  });
+}
+
+function showOnly(id) {
+  ['scr-onboarding', 'scr-input', 'scr-progress', 'scr-followup', 'scr-result'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function esc(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function safeUrl(url) {
+  return /^https?:\/\//.test(url || '') ? url : '#';
+}
+
+initializeMemorySlots();
+renderMemorySlotControls();
+emptyOnboardingState();
+renderOnboarding();
+refreshWorkspace();
+</script>
+</body>
+</html>
