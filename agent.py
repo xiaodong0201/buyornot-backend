@@ -1227,6 +1227,13 @@ def wants_social_posts(query: str) -> bool:
             "forum",
             "user discussion",
             "北美用户讨论",
+            "值不值得",
+            "值不值",
+            "买吗",
+            "推荐吗",
+            "怎么样",
+            "真实体验",
+            "用户评价",
             "wirecutter",
             "cnet",
             "the verge",
@@ -2291,8 +2298,44 @@ def build_search_plan(understanding: dict, clarification: dict | None = None) ->
     return [(key, label, template.format(target=target)) for key, label, template in plan]
 
 
-def run_one_search(query: str, search_depth: str, max_results: int) -> dict:
+def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast: bool = False) -> dict:
     social_mode = wants_social_posts(query)
+    if prefer_fast:
+        tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
+        response = tavily.search(
+            query=tavily_query,
+            search_depth="basic",
+            max_results=max_results,
+            include_answer=False,
+        )
+        formatted_results = [
+            {
+                "title": clean_text(item.get("title", ""), 90),
+                "url": item.get("url", ""),
+                "site": extract_site(item.get("url", "")),
+                "snippet": clean_text(item.get("content", ""), 180),
+                "image_url": "",
+            }
+            for item in response.get("results", [])
+        ]
+        ranked = sorted(
+            formatted_results,
+            key=lambda item: source_relevance_score(query, item),
+            reverse=True,
+        )
+        filtered = [
+            item for item in ranked
+            if source_relevance_score(query, item) >= (2.2 if social_mode else 2.0)
+            and is_query_relevant(query, item, social_mode=social_mode)
+        ]
+        return {
+            "answer": "",
+            "results": diversify_sources_by_site(filtered or ranked, max_results),
+            "queries": [],
+            "key_points": [],
+            "error": "",
+        }
+
     try:
         grounded = run_one_google_grounded_search(query, max_results)
         grounded_results = grounded.get("results", [])
@@ -2530,7 +2573,7 @@ def search_multi(
     )
 
     try:
-        payload = run_one_search(query, search_depth, max_results)
+        payload = run_one_search(query, search_depth, max_results, prefer_fast=(phase == "scoping"))
         emit_progress(
             callback,
             type="status",
