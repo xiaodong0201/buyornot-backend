@@ -330,6 +330,7 @@ Rules for evidence quality:
 - If there are useful source images, include a source_gallery module so the result feels richer and easier to trust.
 - image_search: set needed=true only when one extra batch of reference images would materially improve trust, visual understanding, or side-by-side comparison.
 - image_search.query must be a SINGLE compact search phrase. Never request multiple searches, multiple variants, or operator-heavy queries.
+- If you include recommendation_carousel or comparison_cards, image_search.query should try to surface the main product and the strongest alternatives in one search so those cards can also show images.
 - If image_search.needed is false, set image_search.query and image_search.reason to empty strings.
 - Every key conclusion should cite at least one source id when usable evidence exists.
 - In fit_summary and summary, explicitly connect product traits to user traits:
@@ -1759,6 +1760,93 @@ def merge_gallery_items(primary_items: list[dict], secondary_items: list[dict], 
     return merged
 
 
+def _normalized_match_tokens(*parts: str) -> set[str]:
+    text = " ".join(part for part in parts if part).lower()
+    tokens = re.findall(r"[a-z0-9]+", text)
+    stopwords = {
+        "the", "and", "for", "with", "this", "that", "from", "real", "life",
+        "comparison", "review", "vs", "video", "youtube", "guide", "best",
+        "worth", "buying", "product", "photo", "photos", "image", "images",
+        "cabin", "carry", "check", "in",
+    }
+    return {token for token in tokens if len(token) >= 3 and token not in stopwords}
+
+
+def _best_reference_image_for_item(item: dict, image_cards: list[dict], used_keys: set[str]) -> dict | None:
+    item_tokens = _normalized_match_tokens(item.get("title", ""), item.get("body", ""), item.get("footer", ""))
+    if not image_cards:
+        return None
+
+    best_card = None
+    best_score = 0.0
+    for index, card in enumerate(image_cards):
+        key = card.get("image_url") or card.get("title", "") or str(index)
+        if key in used_keys:
+            continue
+        candidate_tokens = _normalized_match_tokens(
+            card.get("title", ""),
+            card.get("body", ""),
+            ((card.get("sources") or [{}])[0]).get("title", ""),
+            ((card.get("sources") or [{}])[0]).get("site", ""),
+        )
+        overlap = len(item_tokens & candidate_tokens)
+        title_hit = 1.5 if item.get("title", "").strip() and item.get("title", "").lower() in card.get("title", "").lower() else 0
+        footer_hit = 0.8 if item.get("footer", "").strip() and item.get("footer", "").lower() in card.get("title", "").lower() else 0
+        score = overlap + title_hit + footer_hit
+        if score > best_score:
+            best_score = score
+            best_card = card
+
+    if best_card:
+        return best_card
+
+    for card in image_cards:
+        key = card.get("image_url") or card.get("title", "")
+        if key and key not in used_keys:
+            return card
+    return None
+
+
+def enrich_visual_module_items_with_reference_images(modules: list[dict], image_cards: list[dict]) -> list[dict]:
+    if not image_cards:
+        return modules
+
+    used_keys: set[str] = set()
+    enriched_modules: list[dict] = []
+
+    for module in modules:
+        if module.get("type") not in {"recommendation_carousel", "comparison_cards"}:
+            enriched_modules.append(module)
+            continue
+
+        updated_module = dict(module)
+        updated_items: list[dict] = []
+        for item in module.get("items") or []:
+            updated_item = dict(item)
+            if not updated_item.get("image_url"):
+                best_card = _best_reference_image_for_item(updated_item, image_cards, used_keys)
+                if best_card:
+                    card_key = best_card.get("image_url") or best_card.get("title", "")
+                    if card_key:
+                        used_keys.add(card_key)
+                    updated_item["image_url"] = best_card.get("image_url", "")
+                    merged_sources = (updated_item.get("sources") or []) + (best_card.get("sources") or [])
+                    deduped_sources = []
+                    seen_urls: set[str] = set()
+                    for source in merged_sources:
+                        url = source.get("url", "")
+                        if not url or url in seen_urls:
+                            continue
+                        seen_urls.add(url)
+                        deduped_sources.append(source)
+                    updated_item["sources"] = deduped_sources[:2]
+            updated_items.append(updated_item)
+        updated_module["items"] = updated_items
+        enriched_modules.append(updated_module)
+
+    return enriched_modules
+
+
 def attach_reference_image_gallery(result: dict) -> dict:
     image_search = result.get("image_search")
     if not isinstance(image_search, dict):
@@ -1810,6 +1898,7 @@ def attach_reference_image_gallery(result: dict) -> dict:
             }
         )
 
+    updated_modules = enrich_visual_module_items_with_reference_images(updated_modules, image_cards)
     result["display_modules"] = updated_modules
 
     research = result.get("research")
