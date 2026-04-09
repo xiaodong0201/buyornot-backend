@@ -2336,31 +2336,25 @@ def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast:
             "error": "",
         }
 
-    try:
-        grounded = run_one_google_grounded_search(query, max_results)
-        grounded_results = grounded.get("results", [])
-        if grounded_results:
-            ranked_grounded = sorted(
-                grounded_results,
-                key=lambda item: source_relevance_score(query, item),
-                reverse=True,
-            )
-            if social_mode:
-                thresholded = [
-                    item
-                    for item in ranked_grounded
-                    if source_relevance_score(query, item) >= 2.2 and is_query_relevant(query, item, social_mode=True)
-                ]
-            else:
+    if not social_mode:
+        try:
+            grounded = run_one_google_grounded_search(query, max_results)
+            grounded_results = grounded.get("results", [])
+            if grounded_results:
+                ranked_grounded = sorted(
+                    grounded_results,
+                    key=lambda item: source_relevance_score(query, item),
+                    reverse=True,
+                )
                 thresholded = [
                     item
                     for item in ranked_grounded
                     if source_relevance_score(query, item) >= 1.8 and is_query_relevant(query, item)
                 ]
-            grounded["results"] = diversify_sources_by_site(thresholded or ranked_grounded, max_results)
-            return grounded
-    except Exception:
-        pass
+                grounded["results"] = diversify_sources_by_site(thresholded or ranked_grounded, max_results)
+                return grounded
+        except Exception:
+            pass
 
     tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
     response = tavily.search(
@@ -2401,7 +2395,7 @@ def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast:
             item for item in ranked if source_relevance_score(query, item) >= 2.0 and is_query_relevant(query, item)
         ]
         formatted_results = diversify_sources_by_site(thresholded or ranked, max_results)
-    formatted_results = hydrate_result_images(formatted_results)
+    formatted_results = hydrate_result_images(formatted_results, limit=1)
     return {
         "answer": clean_text(response.get("answer", ""), 240),
         "results": formatted_results,
@@ -2418,7 +2412,7 @@ def resolve_page_image(url: str) -> str:
     if social_image and looks_like_product_image(social_image):
         return social_image
     try:
-        html = fetch_url_text(url, timeout=3)
+        html = fetch_url_text(url, timeout=2)
     except Exception:
         return ""
     if not html:
@@ -2430,11 +2424,11 @@ def resolve_page_image(url: str) -> str:
     return ""
 
 
-def hydrate_result_images(results: list[dict]) -> list[dict]:
+def hydrate_result_images(results: list[dict], limit: int = 1) -> list[dict]:
     hydrated = []
     for index, item in enumerate(results):
         enriched = dict(item)
-        if not enriched.get("image_url") and index < 3:
+        if not enriched.get("image_url") and index < limit:
             enriched["image_url"] = resolve_page_image(enriched.get("url", ""))
         hydrated.append(enriched)
     return hydrated
@@ -2519,7 +2513,7 @@ Please search in English, think from a US consumer perspective, and then return 
     )
     parsed = parse_json(response.text)
     grounded_sources, grounded_queries = extract_grounding_sources(response)
-    grounded_sources = hydrate_result_images(grounded_sources[:max_results])
+    grounded_sources = hydrate_result_images(grounded_sources[:max_results], limit=1)
     return {
         "answer": clean_text(parsed.get("answer", ""), 240),
         "results": grounded_sources,
@@ -2606,6 +2600,23 @@ def search_multi(
                 "error": error_text,
             }
         }
+
+
+def should_skip_scoping(understanding: dict, product_hint: str, input_text: str) -> bool:
+    combined = f"{input_text or ''} {product_hint or ''}".strip()
+    return (
+        understanding.get("intent") == "evaluate"
+        and understanding.get("is_specific_product")
+        and understanding.get("ambiguity_level") == "clear"
+        and not understanding.get("needs_budget")
+        and not understanding.get("needs_use_case")
+        and not understanding.get("needs_skin_type")
+        and not understanding.get("needs_occupation_context")
+        and not has_budget_signal(combined)
+        and not has_use_case_signal(combined)
+        and not has_skin_signal(combined)
+        and not has_occupation_signal(combined)
+    )
 
 
 def format_search_block(search_data: dict) -> str:
@@ -3857,18 +3868,29 @@ def analyze(
     )
     user_context, memory_meta = build_user_context(user_profile or {}, user_history or [], understanding)
 
-    scoping_plan = build_scoping_plan(understanding)
-    scoping_data = search_multi(scoping_plan, callback=callback, phase="scoping")
-    clarification = generate_clarification_strategy(
-        understanding=understanding,
-        product_hint=product_hint,
-        user_profile=user_profile or {},
-        followup_qa=[],
-        followup_count=0,
-        search_data=scoping_data,
-        user_context=user_context,
-        callback=callback,
-    )
+    if should_skip_scoping(understanding, product_hint, input_text or ""):
+        emit_progress(
+            callback,
+            type="status",
+            step="search",
+            label="信息已经够了，我直接去查",
+            detail="这次不用先绕一圈，我直接带着重点往下搜。",
+        )
+        scoping_data = {}
+        clarification = {"decision_dimensions": [], "search_focus": [], "preliminary_take": "", "needs_followup": False}
+    else:
+        scoping_plan = build_scoping_plan(understanding)
+        scoping_data = search_multi(scoping_plan, callback=callback, phase="scoping")
+        clarification = generate_clarification_strategy(
+            understanding=understanding,
+            product_hint=product_hint,
+            user_profile=user_profile or {},
+            followup_qa=[],
+            followup_count=0,
+            search_data=scoping_data,
+            user_context=user_context,
+            callback=callback,
+        )
     if clarification.get("needs_followup"):
         emit_progress(
             callback,
