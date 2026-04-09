@@ -8,6 +8,10 @@ class AnalyzeRequest(BaseModel):
     image_base64: Optional[str] = None
     analysis_mode: str = "decision"
 
+
+class PreviewImageRequest(BaseModel):
+    text: str
+
 class FollowupAnswer(BaseModel):
     question: str
     answer: str
@@ -37,8 +41,8 @@ class ScoreBreakdown(BaseModel):
     quality: int = 3
     brand: int = 3
     fit: int = 3
-    longevity: int = 3
     reviews: int = 3
+    safety: int = 3
 
 
 class DecisionResult(BaseModel):
@@ -47,6 +51,7 @@ class DecisionResult(BaseModel):
     summary: str
     reasons: list[str]
     scores: Optional[ScoreBreakdown] = None
+    dimension_priority: Optional[list[str]] = None
     followup: Optional[FollowupOption] = None
     product_name: Optional[str] = None
     category: Optional[str] = None

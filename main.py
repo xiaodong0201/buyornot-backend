@@ -9,9 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from agent import analyze, analyze_with_followup, extract_profile_signals_from_answer
+from agent import (
+    analyze,
+    analyze_with_followup,
+    extract_profile_signals_from_answer,
+    find_verified_preview_image,
+)
 from db import get_or_create_profile, get_user_sessions, merge_profile, save_session
-from models import AnalyzeRequest, FollowupRequest, ProfileUpdateRequest
+from models import AnalyzeRequest, FollowupRequest, PreviewImageRequest, ProfileUpdateRequest
 
 app = FastAPI(title="Buy or Not API")
 
@@ -258,6 +263,18 @@ def merge_profile_data(user_id: str, req: ProfileUpdateRequest):
     merge_profile(user_id, req.updates or {})
     profile = get_or_create_profile(user_id)
     return {"profile": profile}
+
+
+@app.post("/preview-image")
+def preview_image(req: PreviewImageRequest):
+    result = find_verified_preview_image(req.text)
+    return result or {
+        "matched": False,
+        "image_base64": None,
+        "page_url": "",
+        "image_url": "",
+        "reason": "No verified product image found.",
+    }
 
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
