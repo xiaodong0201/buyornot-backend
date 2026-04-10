@@ -4043,7 +4043,7 @@ def analyze(
         memory_meta=memory_meta,
         followup_qa=[],
     )
-    if normalized.get("followup"):
+    if len(normalized.get("followup_questions") or []) > 0:
         return normalized
     return attach_reference_image_gallery(normalized)
 
@@ -4112,6 +4112,6 @@ def analyze_with_followup(
         memory_meta=memory_meta,
         followup_qa=followup_qa,
     )
-    if normalized.get("followup"):
+    if (normalized.get("followup_questions") or []) and len(followup_qa or []) < 3:
         return normalized
     return attach_reference_image_gallery(normalized)
