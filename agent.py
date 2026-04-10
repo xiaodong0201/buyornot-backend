@@ -1660,6 +1660,18 @@ def image_bytes_look_usable(image_bytes: bytes) -> bool:
 def choose_verified_reference_image(query: str, item: dict) -> tuple[str, bytes] | tuple[None, None]:
     title = clean_text(item.get("title", "") or item.get("source", "") or query, 100)
     snippet = clean_text(item.get("source", "") or item.get("snippet", "") or "", 160)
+    blocked_meta_tokens = [
+        "permission",
+        "access",
+        "serve this content",
+        "forbidden",
+        "blocked",
+        "denied",
+        "captcha",
+    ]
+    lowered_meta = f"{title} {snippet}".lower()
+    if any(token in lowered_meta for token in blocked_meta_tokens):
+        return None, None
     candidate_urls = []
     for candidate in [
         item.get("original", ""),
@@ -1809,6 +1821,7 @@ def search_reference_images_once(query: str, limit: int = 6) -> list[dict]:
     raw_items = payload.get("images_results") or payload.get("image_results") or []
     cards: list[dict] = []
     seen: set[str] = set()
+    candidates: list[dict] = []
 
     for item in raw_items:
         page_url = clean_text(
@@ -1840,17 +1853,46 @@ def search_reference_images_once(query: str, limit: int = 6) -> list[dict]:
             "snippet": body,
             "image_url": image_url,
         }
-        cards.append(
+        candidates.append(
             {
                 "title": title or site or "图片参考",
                 "body": body,
                 "footer": site,
                 "image_url": image_url,
                 "sources": [source],
+                "_image_bytes": image_bytes,
+                "_score": source_relevance_score(cleaned_query, source),
             }
         )
-        if len(cards) >= limit:
-            break
+
+    ranked_candidates = sorted(candidates, key=lambda item: item.get("_score", 0.0), reverse=True)
+    ranked_candidates = ranked_candidates[: max(limit * 4, 12)]
+
+    def verify_candidate(candidate: dict) -> tuple[bool, float]:
+        image_bytes = candidate.get("_image_bytes") or b""
+        verdict = verify_reference_image_match(
+            cleaned_query,
+            candidate.get("title", ""),
+            candidate.get("body", ""),
+            image_bytes,
+        )
+        return bool(verdict.get("is_usable")), float(verdict.get("confidence") or 0.0)
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_map = {executor.submit(verify_candidate, candidate): candidate for candidate in ranked_candidates}
+        for future in as_completed(future_map):
+            candidate = future_map[future]
+            try:
+                is_usable, confidence = future.result()
+            except Exception:
+                continue
+            if not is_usable or confidence < 0.55:
+                continue
+            candidate.pop("_image_bytes", None)
+            candidate.pop("_score", None)
+            cards.append(candidate)
+            if len(cards) >= limit:
+                break
 
     return cards
 
