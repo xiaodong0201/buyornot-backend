@@ -1545,6 +1545,25 @@ Rules:
 """
 
 
+REFERENCE_IMAGE_VERIFY_PROMPT = """You are checking whether an image is a usable visual reference for a user's buying question.
+
+Return ONLY valid JSON:
+{
+  "is_usable": true | false,
+  "confidence": 0.0,
+  "reason": "<short reason>"
+}
+
+Rules:
+- Reject screenshots of articles, webpages, social posts, and text-heavy title cards.
+- Reject placeholder images, access-denied images, permission-warning images, and broken-image fallbacks.
+- Reject logos, icons, charts, pure text graphics, memes, or generic promotional banners.
+- Reject images that are clearly unrelated to the product/object the query is about.
+- Accept only if the image gives a direct and useful visual reference for the query or named product.
+- Be strict. If unsure, return is_usable=false.
+"""
+
+
 def verify_preview_image_match(query: str, page_title: str, page_snippet: str, image_bytes: bytes) -> dict:
     try:
         pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -1576,6 +1595,83 @@ PAGE SNIPPET:
             "identified_product": "",
             "reason": clean_text(str(exc), 120),
         }
+
+
+def verify_reference_image_match(query: str, page_title: str, page_snippet: str, image_bytes: bytes) -> dict:
+    try:
+        pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        return {"is_usable": False, "confidence": 0.0, "reason": "invalid image"}
+
+    prompt = f"""USER QUERY:
+{query}
+
+PAGE TITLE:
+{page_title}
+
+PAGE SNIPPET:
+{page_snippet}
+"""
+    try:
+        response = _fast_json_model(REFERENCE_IMAGE_VERIFY_PROMPT).generate_content([pil_image, prompt])
+        payload = parse_json(response.text)
+        return {
+            "is_usable": bool(payload.get("is_usable")),
+            "confidence": float(payload.get("confidence") or 0.0),
+            "reason": clean_text(payload.get("reason", ""), 160),
+        }
+    except Exception as exc:
+        return {
+            "is_usable": False,
+            "confidence": 0.0,
+            "reason": clean_text(str(exc), 120),
+        }
+
+
+def image_bytes_look_usable(image_bytes: bytes) -> bool:
+    if not image_bytes or len(image_bytes) < 1200:
+        return False
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        width, height = image.size
+    except Exception:
+        return False
+    if width < 80 or height < 80:
+        return False
+    aspect_ratio = max(width, height) / max(1, min(width, height))
+    if aspect_ratio > 4.0:
+        return False
+    return True
+
+
+def choose_verified_reference_image(query: str, item: dict) -> tuple[str, bytes] | tuple[None, None]:
+    title = clean_text(item.get("title", "") or item.get("source", "") or query, 100)
+    snippet = clean_text(item.get("source", "") or item.get("snippet", "") or "", 160)
+    candidate_urls = []
+    for candidate in [
+        item.get("original", ""),
+        item.get("image", ""),
+        item.get("thumbnail", ""),
+        item.get("thumbnail_url", ""),
+    ]:
+        cleaned = clean_text(candidate, 500)
+        if cleaned and cleaned not in candidate_urls:
+            candidate_urls.append(cleaned)
+
+    for candidate_url in candidate_urls:
+        if not looks_like_product_image(candidate_url):
+            continue
+        try:
+            image_bytes = fetch_binary(candidate_url, timeout=6)
+        except Exception:
+            continue
+        if not image_bytes_look_usable(image_bytes):
+            continue
+        verification = verify_reference_image_match(query, title, snippet, image_bytes)
+        if verification.get("is_usable") and float(verification.get("confidence") or 0.0) >= 0.38:
+            return candidate_url, image_bytes
+
+    return None, None
 
 
 ENGLISH_SEARCH_PROMPT = """Translate the user's buying need into one compact English web search phrase.
@@ -1710,13 +1806,7 @@ def search_reference_images_once(query: str, limit: int = 6) -> list[dict]:
             or item.get("source_url", ""),
             500,
         )
-        image_url = clean_text(
-            item.get("original", "")
-            or item.get("thumbnail", "")
-            or item.get("image", "")
-            or item.get("thumbnail_url", ""),
-            500,
-        )
+        image_url, image_bytes = choose_verified_reference_image(cleaned_query, item)
         if not image_url:
             continue
 
@@ -1724,6 +1814,9 @@ def search_reference_images_once(query: str, limit: int = 6) -> list[dict]:
         if dedupe_key in seen:
             continue
         seen.add(dedupe_key)
+
+        if not image_bytes_look_usable(image_bytes or b""):
+            continue
 
         site = extract_site(page_url) or clean_text(item.get("source", ""), 60) or "Google Images"
         title = clean_text(item.get("title", "") or item.get("source", "") or cleaned_query, 100)

@@ -3,16 +3,18 @@ import os
 import queue
 import threading
 import uuid
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent import (
     analyze,
     analyze_with_followup,
     extract_profile_signals_from_answer,
+    fetch_binary,
     find_verified_preview_image,
 )
 from db import get_or_create_profile, get_user_sessions, merge_profile, save_session
@@ -32,6 +34,44 @@ pending_sessions: dict[str, dict] = {}
 
 def ndjson_line(payload: dict) -> bytes:
     return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def build_image_proxy_url(base_url: str, image_url: str) -> str:
+    cleaned = (image_url or "").strip()
+    if not cleaned.startswith(("http://", "https://")):
+        return cleaned
+    prefix = base_url.rstrip("/") + "/image-proxy?url="
+    if cleaned.startswith(prefix):
+        return cleaned
+    return prefix + quote(cleaned, safe="")
+
+
+def rewrite_image_urls(payload, base_url: str):
+    if isinstance(payload, dict):
+        updated = {}
+        for key, value in payload.items():
+            if key == "image_url" and isinstance(value, str):
+                updated[key] = build_image_proxy_url(base_url, value)
+            else:
+                updated[key] = rewrite_image_urls(value, base_url)
+        return updated
+    if isinstance(payload, list):
+        return [rewrite_image_urls(item, base_url) for item in payload]
+    return payload
+
+
+def guess_media_type(image_bytes: bytes) -> str:
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    if image_bytes.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if image_bytes.lstrip().startswith(b"<svg") or b"<svg" in image_bytes[:200]:
+        return "image/svg+xml"
+    return "application/octet-stream"
 
 
 
@@ -149,7 +189,7 @@ def stream_worker(run_analysis):
         yield ndjson_line(item)
 
 
-def run_analyze(req: AnalyzeRequest, emit) -> dict:
+def run_analyze(req: AnalyzeRequest, emit, base_url: str | None = None) -> dict:
     if not req.text and not req.image_base64:
         raise HTTPException(status_code=400, detail="Provide text or image_base64")
 
@@ -165,10 +205,12 @@ def run_analyze(req: AnalyzeRequest, emit) -> dict:
         callback=emit,
     )
     event_type, payload = finalize_analysis_response(req, result)
+    if base_url:
+        payload = rewrite_image_urls(payload, base_url)
     return {"type": event_type, "data": payload}
 
 
-def run_followup(req: FollowupRequest, emit) -> dict:
+def run_followup(req: FollowupRequest, emit, base_url: str | None = None) -> dict:
     session_state = pending_sessions.get(req.session_id)
     if not session_state:
         raise HTTPException(status_code=404, detail="Follow-up session not found or expired")
@@ -209,6 +251,8 @@ def run_followup(req: FollowupRequest, emit) -> dict:
         callback=emit,
     )
     event_type, payload = finalize_followup_response(req, session_state, result, answer_pairs)
+    if base_url:
+        payload = rewrite_image_urls(payload, base_url)
     return {"type": event_type, "data": payload}
 
 
@@ -217,31 +261,51 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/image-proxy")
+def image_proxy(url: str):
+    cleaned = (url or "").strip()
+    if not cleaned.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid image url")
+    try:
+        image_bytes = fetch_binary(cleaned, timeout=10)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Image fetch failed: {exc}") from exc
+    if not image_bytes:
+        raise HTTPException(status_code=404, detail="Empty image response")
+    return Response(
+        content=image_bytes,
+        media_type=guess_media_type(image_bytes),
+        headers={
+            "Cache-Control": "public, max-age=86400",
+        },
+    )
+
+
 @app.post("/analyze")
-def analyze_product(req: AnalyzeRequest):
+def analyze_product(req: AnalyzeRequest, request: Request):
     capture: list[dict] = []
-    payload = run_analyze(req, capture.append)
+    payload = run_analyze(req, capture.append, base_url=str(request.base_url).rstrip("/"))
     return payload["data"]
 
 
 @app.post("/analyze/stream")
-def analyze_product_stream(req: AnalyzeRequest):
+def analyze_product_stream(req: AnalyzeRequest, request: Request):
     return StreamingResponse(
-        stream_worker(lambda emit: run_analyze(req, emit)),
+        stream_worker(lambda emit: run_analyze(req, emit, base_url=str(request.base_url).rstrip("/"))),
         media_type="application/x-ndjson",
     )
 
 
 @app.post("/followup")
-def answer_followup(req: FollowupRequest):
-    payload = run_followup(req, lambda _: None)
+def answer_followup(req: FollowupRequest, request: Request):
+    payload = run_followup(req, lambda _: None, base_url=str(request.base_url).rstrip("/"))
     return payload["data"]
 
 
 @app.post("/followup/stream")
-def answer_followup_stream(req: FollowupRequest):
+def answer_followup_stream(req: FollowupRequest, request: Request):
     return StreamingResponse(
-        stream_worker(lambda emit: run_followup(req, emit)),
+        stream_worker(lambda emit: run_followup(req, emit, base_url=str(request.base_url).rstrip("/"))),
         media_type="application/x-ndjson",
     )
 
