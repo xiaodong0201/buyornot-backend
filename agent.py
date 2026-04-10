@@ -1662,14 +1662,12 @@ def choose_verified_reference_image(query: str, item: dict) -> tuple[str, bytes]
         if not looks_like_product_image(candidate_url):
             continue
         try:
-            image_bytes = fetch_binary(candidate_url, timeout=6)
+            image_bytes = fetch_binary(candidate_url, timeout=3)
         except Exception:
             continue
         if not image_bytes_look_usable(image_bytes):
             continue
-        verification = verify_reference_image_match(query, title, snippet, image_bytes)
-        if verification.get("is_usable") and float(verification.get("confidence") or 0.0) >= 0.38:
-            return candidate_url, image_bytes
+        return candidate_url, image_bytes
 
     return None, None
 
@@ -2429,7 +2427,58 @@ def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast:
             "error": "",
         }
 
+    def run_tavily_payload() -> dict:
+        tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
+        response = tavily.search(
+            query=tavily_query,
+            search_depth=search_depth,
+            max_results=max_results,
+            include_answer=True,
+        )
+        formatted_results = [
+            {
+                "title": clean_text(item.get("title", ""), 90),
+                "url": item.get("url", ""),
+                "site": extract_site(item.get("url", "")),
+                "snippet": clean_text(item.get("content", ""), 180),
+                "image_url": item.get("image_url", "") or item.get("thumbnail_url", "") or item.get("image", ""),
+            }
+            for item in response.get("results", [])
+        ]
+        if social_mode:
+            merged = sorted(
+                formatted_results,
+                key=lambda item: source_relevance_score(query, item),
+                reverse=True,
+            )
+            thresholded = [
+                item
+                for item in merged
+                if source_relevance_score(query, item) >= 2.4 and is_query_relevant(query, item, social_mode=True)
+            ]
+            formatted_results = diversify_sources_by_site(thresholded or merged, max_results)
+        else:
+            ranked = sorted(
+                formatted_results,
+                key=lambda item: source_relevance_score(query, item),
+                reverse=True,
+            )
+            thresholded = [
+                item for item in ranked if source_relevance_score(query, item) >= 2.0 and is_query_relevant(query, item)
+            ]
+            formatted_results = diversify_sources_by_site(thresholded or ranked, max_results)
+        formatted_results = hydrate_result_images(formatted_results, limit=1)
+        return {
+            "answer": clean_text(response.get("answer", ""), 240),
+            "results": formatted_results,
+            "queries": [],
+            "key_points": [],
+            "error": "",
+        }
+
     if not social_mode:
+        executor = ThreadPoolExecutor(max_workers=1)
+        tavily_future = executor.submit(run_tavily_payload)
         try:
             grounded = run_one_google_grounded_search(query, max_results)
             grounded_results = grounded.get("results", [])
@@ -2448,54 +2497,12 @@ def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast:
                 return grounded
         except Exception:
             pass
+        try:
+            return tavily_future.result()
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
-    tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
-    response = tavily.search(
-        query=tavily_query,
-        search_depth=search_depth,
-        max_results=max_results,
-        include_answer=True,
-    )
-    formatted_results = [
-        {
-            "title": clean_text(item.get("title", ""), 90),
-            "url": item.get("url", ""),
-            "site": extract_site(item.get("url", "")),
-            "snippet": clean_text(item.get("content", ""), 180),
-            "image_url": item.get("image_url", "") or item.get("thumbnail_url", "") or item.get("image", ""),
-        }
-        for item in response.get("results", [])
-    ]
-    if social_mode:
-        merged = sorted(
-            formatted_results,
-            key=lambda item: source_relevance_score(query, item),
-            reverse=True,
-        )
-        thresholded = [
-            item
-            for item in merged
-            if source_relevance_score(query, item) >= 2.4 and is_query_relevant(query, item, social_mode=True)
-        ]
-        formatted_results = diversify_sources_by_site(thresholded or merged, max_results)
-    else:
-        ranked = sorted(
-            formatted_results,
-            key=lambda item: source_relevance_score(query, item),
-            reverse=True,
-        )
-        thresholded = [
-            item for item in ranked if source_relevance_score(query, item) >= 2.0 and is_query_relevant(query, item)
-        ]
-        formatted_results = diversify_sources_by_site(thresholded or ranked, max_results)
-    formatted_results = hydrate_result_images(formatted_results, limit=1)
-    return {
-        "answer": clean_text(response.get("answer", ""), 240),
-        "results": formatted_results,
-        "queries": [],
-        "key_points": [],
-        "error": "",
-    }
+    return run_tavily_payload()
 
 
 def resolve_page_image(url: str) -> str:
