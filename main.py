@@ -37,6 +37,8 @@ def ndjson_line(payload: dict) -> bytes:
 
 
 def build_image_proxy_url(base_url: str, image_url: str) -> str:
+    if base_url.startswith("http://") and all(token not in base_url for token in ["localhost", "127.0.0.1"]):
+        base_url = "https://" + base_url.removeprefix("http://")
     cleaned = (image_url or "").strip()
     if not cleaned.startswith(("http://", "https://")):
         return cleaned
