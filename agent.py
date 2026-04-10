@@ -1428,6 +1428,11 @@ def extract_meta_image_candidates(html: str, page_url: str) -> list[str]:
 
 def looks_like_product_image(url: str) -> bool:
     lowered = url.lower()
+    blocked_domains = [
+        "findarticles.com",
+    ]
+    if any(domain in lowered for domain in blocked_domains):
+        return False
     noisy_tokens = [
         "logo",
         "icon",
@@ -1439,6 +1444,14 @@ def looks_like_product_image(url: str) -> bool:
         "placeholder",
         "spacer",
         "loading",
+        "similarweb",
+        "screenshot",
+        "text-image",
+        "permission",
+        "access-denied",
+        "forbidden",
+        "serve-this-content",
+        "blocked",
     ]
     if any(token in lowered for token in noisy_tokens):
         return False
@@ -4030,6 +4043,8 @@ def analyze(
         memory_meta=memory_meta,
         followup_qa=[],
     )
+    if normalized.get("followup"):
+        return normalized
     return attach_reference_image_gallery(normalized)
 
 
@@ -4097,4 +4112,6 @@ def analyze_with_followup(
         memory_meta=memory_meta,
         followup_qa=followup_qa,
     )
+    if normalized.get("followup"):
+        return normalized
     return attach_reference_image_gallery(normalized)
