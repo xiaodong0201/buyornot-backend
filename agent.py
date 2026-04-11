@@ -15,14 +15,10 @@ import google.generativeai as genai
 from google import genai as google_genai
 from google.genai import types as google_genai_types
 from PIL import Image
-from tavily import TavilyClient
-
 load_dotenv()
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 google_search_client = google_genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "").strip()
 
 ProgressCallback = Callable[[dict], None]
 
@@ -1174,7 +1170,7 @@ def search_product_page_candidates_via_bing(query: str) -> list[dict]:
 
 
 def search_product_page_candidates(query: str) -> list[dict]:
-    return search_product_page_candidates_via_tavily(query)
+    return search_product_page_candidates_via_bing(query)
 
 
 SOCIAL_SITE_DOMAINS = ["reddit.com"]
@@ -2071,6 +2067,60 @@ def attach_reference_image_gallery(result: dict) -> dict:
     return result
 
 
+def attach_images_from_search(result: dict, search_data: dict) -> dict:
+    """Build source_gallery from images already present in search results.
+    No extra HTTP calls — images come from Google grounded search og:image extraction."""
+    seen_keys: set[str] = set()
+    cards: list[dict] = []
+
+    for bucket in search_data.values():
+        for item in bucket.get("results", []):
+            image_url = item.get("image_url", "")
+            if not image_url:
+                continue
+            key = image_url
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            cards.append(
+                {
+                    "title": item.get("title") or item.get("site") or "图片参考",
+                    "body": item.get("snippet", ""),
+                    "footer": item.get("site", ""),
+                    "image_url": image_url,
+                    "sources": [
+                        {
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "site": item.get("site", ""),
+                            "snippet": item.get("snippet", ""),
+                            "image_url": image_url,
+                        }
+                    ],
+                }
+            )
+
+    if not cards:
+        return result
+
+    modules = result.get("display_modules") or []
+    existing_gallery = next((m for m in modules if m.get("type") == "source_gallery"), None)
+    if existing_gallery:
+        existing_gallery["items"] = merge_gallery_items(cards, existing_gallery.get("items") or [], limit=6)
+    else:
+        modules.append(
+            {
+                "type": "source_gallery",
+                "title": "我顺手翻到的图和网页",
+                "body": "",
+                "sources": [],
+                "items": cards[:6],
+            }
+        )
+    result["display_modules"] = modules
+    return result
+
+
 def heuristic_understanding(input_text: str, product_hint: str, followup_qa: list | None = None) -> dict:
     followup_text = joined_followup_text(followup_qa)
     combined = f"{input_text or ''} {product_hint or ''} {followup_text}".strip()
@@ -2445,119 +2495,30 @@ def build_search_plan(understanding: dict, clarification: dict | None = None) ->
 
 
 def run_one_search(query: str, search_depth: str, max_results: int, prefer_fast: bool = False) -> dict:
-    social_mode = wants_social_posts(query)
-    if prefer_fast:
-        tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
-        response = tavily.search(
-            query=tavily_query,
-            search_depth="basic",
-            max_results=max_results,
-            include_answer=False,
-        )
-        formatted_results = [
-            {
-                "title": clean_text(item.get("title", ""), 90),
-                "url": item.get("url", ""),
-                "site": extract_site(item.get("url", "")),
-                "snippet": clean_text(item.get("content", ""), 180),
-                "image_url": "",
-            }
-            for item in response.get("results", [])
-        ]
-        ranked = sorted(
-            formatted_results,
-            key=lambda item: source_relevance_score(query, item),
-            reverse=True,
-        )
-        filtered = [
-            item for item in ranked
-            if source_relevance_score(query, item) >= (2.2 if social_mode else 2.0)
-            and is_query_relevant(query, item, social_mode=social_mode)
-        ]
+    """Run a single web search using Gemini's native Google Search grounding."""
+    try:
+        grounded = run_one_google_grounded_search(query, max_results)
+        grounded_results = grounded.get("results", [])
+        if grounded_results:
+            ranked = sorted(
+                grounded_results,
+                key=lambda item: source_relevance_score(query, item),
+                reverse=True,
+            )
+            thresholded = [
+                item for item in ranked
+                if source_relevance_score(query, item) >= 1.8 and is_query_relevant(query, item)
+            ]
+            grounded["results"] = diversify_sources_by_site(thresholded or ranked, max_results)
+        return grounded
+    except Exception as exc:
         return {
             "answer": "",
-            "results": diversify_sources_by_site(filtered or ranked, max_results),
+            "results": [],
             "queries": [],
             "key_points": [],
-            "error": "",
+            "error": clean_text(str(exc), 160),
         }
-
-    def run_tavily_payload() -> dict:
-        tavily_query = build_social_site_query(query) if social_mode else sanitize_tavily_query(query)
-        response = tavily.search(
-            query=tavily_query,
-            search_depth=search_depth,
-            max_results=max_results,
-            include_answer=True,
-        )
-        formatted_results = [
-            {
-                "title": clean_text(item.get("title", ""), 90),
-                "url": item.get("url", ""),
-                "site": extract_site(item.get("url", "")),
-                "snippet": clean_text(item.get("content", ""), 180),
-                "image_url": item.get("image_url", "") or item.get("thumbnail_url", "") or item.get("image", ""),
-            }
-            for item in response.get("results", [])
-        ]
-        if social_mode:
-            merged = sorted(
-                formatted_results,
-                key=lambda item: source_relevance_score(query, item),
-                reverse=True,
-            )
-            thresholded = [
-                item
-                for item in merged
-                if source_relevance_score(query, item) >= 2.4 and is_query_relevant(query, item, social_mode=True)
-            ]
-            formatted_results = diversify_sources_by_site(thresholded or merged, max_results)
-        else:
-            ranked = sorted(
-                formatted_results,
-                key=lambda item: source_relevance_score(query, item),
-                reverse=True,
-            )
-            thresholded = [
-                item for item in ranked if source_relevance_score(query, item) >= 2.0 and is_query_relevant(query, item)
-            ]
-            formatted_results = diversify_sources_by_site(thresholded or ranked, max_results)
-        formatted_results = hydrate_result_images(formatted_results, limit=1)
-        return {
-            "answer": clean_text(response.get("answer", ""), 240),
-            "results": formatted_results,
-            "queries": [],
-            "key_points": [],
-            "error": "",
-        }
-
-    if not social_mode:
-        executor = ThreadPoolExecutor(max_workers=1)
-        tavily_future = executor.submit(run_tavily_payload)
-        try:
-            grounded = run_one_google_grounded_search(query, max_results)
-            grounded_results = grounded.get("results", [])
-            if grounded_results:
-                ranked_grounded = sorted(
-                    grounded_results,
-                    key=lambda item: source_relevance_score(query, item),
-                    reverse=True,
-                )
-                thresholded = [
-                    item
-                    for item in ranked_grounded
-                    if source_relevance_score(query, item) >= 1.8 and is_query_relevant(query, item)
-                ]
-                grounded["results"] = diversify_sources_by_site(thresholded or ranked_grounded, max_results)
-                return grounded
-        except Exception:
-            pass
-        try:
-            return tavily_future.result()
-        finally:
-            executor.shutdown(wait=False, cancel_futures=True)
-
-    return run_tavily_payload()
 
 
 def resolve_page_image(url: str) -> str:
@@ -2587,6 +2548,32 @@ def hydrate_result_images(results: list[dict], limit: int = 1) -> list[dict]:
             enriched["image_url"] = resolve_page_image(enriched.get("url", ""))
         hydrated.append(enriched)
     return hydrated
+
+
+def hydrate_result_images_parallel(results: list[dict], limit: int = 3) -> list[dict]:
+    """Fetch og:images for up to `limit` results in parallel (max 3s wall time)."""
+    if not results:
+        return results
+    to_fetch = [(i, item) for i, item in enumerate(results) if not item.get("image_url")][:limit]
+    if not to_fetch:
+        return results
+
+    updated = list(results)
+
+    def fetch_one(args: tuple) -> tuple[int, str]:
+        idx, item = args
+        return idx, resolve_page_image(item.get("url", ""))
+
+    with ThreadPoolExecutor(max_workers=min(3, len(to_fetch))) as executor:
+        futures = {executor.submit(fetch_one, args): args[0] for args in to_fetch}
+        try:
+            for future in as_completed(futures, timeout=4):
+                idx, image_url = future.result()
+                if image_url:
+                    updated[idx] = {**updated[idx], "image_url": image_url}
+        except Exception:
+            pass
+    return updated
 
 
 def canonicalize_grounded_url(url: str) -> str:
@@ -2668,7 +2655,9 @@ Please search in English, think from a US consumer perspective, and then return 
     )
     parsed = parse_json(response.text)
     grounded_sources, grounded_queries = extract_grounding_sources(response)
-    grounded_sources = hydrate_result_images(grounded_sources[:max_results], limit=1)
+    # Google grounding returns redirect proxy URLs (vertexaisearch.cloud.google.com)
+    # which can't be resolved for og:image within timeout — skip image hydration
+    grounded_sources = grounded_sources[:max_results]
     return {
         "answer": clean_text(parsed.get("answer", ""), 240),
         "results": grounded_sources,
@@ -3096,6 +3085,95 @@ def fallback_clarification_strategy(
     ]
     strategy["dimension_priority"] = ["适配度", "品质", "性价比", "口碑", "品牌", "安全"]
     return strategy
+
+
+def clarify_without_search(
+    understanding: dict,
+    product_hint: str,
+    user_profile: dict,
+    followup_qa: list | None,
+    followup_count: int,
+    callback: ProgressCallback | None = None,
+) -> dict:
+    """Decide whether clarification is needed, purely from understanding + user profile.
+    No web search or extra LLM call — fast and stable."""
+    emit_progress(
+        callback,
+        type="status",
+        step="clarify",
+        label="先想想还差哪块关键信息",
+        detail="基于你的问题和背景，看看有没有会明显影响判断的信息还没确认。",
+    )
+
+    # Safety-critical framework questions always fire first (pets, supplements, skincare, occupation).
+    # These are category-specific and valid regardless of how clear the product is.
+    framework = build_framework_followup(
+        understanding=understanding,
+        product_hint=product_hint,
+        user_profile=user_profile or {},
+        followup_qa=followup_qa,
+        followup_count=followup_count,
+        search_data={},
+    )
+
+    # For specific evaluate/compare products: only ask truly critical questions.
+    # Use_case and budget are not critical — we can search and give a complete answer.
+    # Recommend intent stays fully checked since the shortlist depends on budget/scenario.
+    CRITICAL_KINDS = {"skin_type", "health_context", "pet_life_stage", "pet_sensitivity", "pet_size", "occupation_context"}
+    is_specific_evaluate = (
+        understanding.get("is_specific_product")
+        and understanding.get("intent") in {"evaluate", "compare"}
+    )
+    if is_specific_evaluate and framework:
+        # Suppress framework if it's not safety/context-critical (e.g., generic use_case)
+        kind = framework.get("missing_dimension", "")
+        if kind not in CRITICAL_KINDS:
+            framework = None
+
+    # Build base structure with sensible dimension defaults
+    base = fallback_clarification_strategy(
+        understanding=understanding,
+        user_profile=user_profile or {},
+        followup_qa=followup_qa,
+        followup_count=followup_count,
+        search_data={},
+    )
+    if is_specific_evaluate:
+        base["needs_followup"] = False
+
+    # Framework overrides fallback when it fires (only critical kinds reach here)
+    if framework:
+        base.update(framework)
+        base["needs_followup"] = True
+
+    # Normalize dimensions
+    priority = normalize_dimension_priority(
+        base.get("dimension_priority"),
+        understanding=understanding,
+        product_hint=product_hint,
+        search_data={},
+    )
+    base["dimension_priority"] = priority
+    base["decision_dimensions"] = normalize_dimension_items(base.get("decision_dimensions"), priority)
+
+    # Build followup_questions array (required by build_early_followup_result)
+    if base.get("needs_followup") and base.get("followup_question"):
+        base["followup_questions"] = [
+            {
+                "question": base["followup_question"],
+                "options": base.get("followup_options", []),
+                "reason": base.get("followup_reason", ""),
+                "question_type": base.get("question_type", "multiple_choice"),
+                "open_text_placeholder": base.get("open_text_placeholder", ""),
+            }
+        ]
+    else:
+        base["needs_followup"] = False
+        base["followup_questions"] = []
+
+    base.setdefault("preliminary_take", "")
+    base.setdefault("search_focus", [])
+    return base
 
 
 def generate_clarification_strategy(
@@ -4023,29 +4101,16 @@ def analyze(
     )
     user_context, memory_meta = build_user_context(user_profile or {}, user_history or [], understanding)
 
-    if should_skip_scoping(understanding, product_hint, input_text or ""):
-        emit_progress(
-            callback,
-            type="status",
-            step="search",
-            label="信息已经够了，我直接去查",
-            detail="这次不用先绕一圈，我直接带着重点往下搜。",
-        )
-        scoping_data = {}
-        clarification = {"decision_dimensions": [], "search_focus": [], "preliminary_take": "", "needs_followup": False}
-    else:
-        scoping_plan = build_scoping_plan(understanding)
-        scoping_data = search_multi(scoping_plan, callback=callback, phase="scoping")
-        clarification = generate_clarification_strategy(
-            understanding=understanding,
-            product_hint=product_hint,
-            user_profile=user_profile or {},
-            followup_qa=[],
-            followup_count=0,
-            search_data=scoping_data,
-            user_context=user_context,
-            callback=callback,
-        )
+    # Fast rule-based clarification — no web search needed at this stage
+    clarification = clarify_without_search(
+        understanding=understanding,
+        product_hint=product_hint,
+        user_profile=user_profile or {},
+        followup_qa=[],
+        followup_count=0,
+        callback=callback,
+    )
+    scoping_data = {}
     if clarification.get("needs_followup"):
         emit_progress(
             callback,
@@ -4087,7 +4152,7 @@ def analyze(
     )
     if len(normalized.get("followup_questions") or []) > 0:
         return normalized
-    return attach_reference_image_gallery(normalized)
+    return attach_images_from_search(normalized, search_data)
 
 
 def analyze_with_followup(
@@ -4156,4 +4221,4 @@ def analyze_with_followup(
     )
     if (normalized.get("followup_questions") or []) and len(followup_qa or []) < 3:
         return normalized
-    return attach_reference_image_gallery(normalized)
+    return attach_images_from_search(normalized, search_data)
